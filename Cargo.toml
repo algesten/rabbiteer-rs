@@ -1,0 +1,8 @@
+[package]
+name = "rabbiteer"
+version = "0.1.0"
+authors = ["Martin Algesten <martin@algesten.se>"]
+
+[dependencies]
+amqp = "0.0.19"
+clap = "2"
