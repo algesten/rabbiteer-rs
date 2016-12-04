@@ -6,3 +6,4 @@ authors = ["Martin Algesten <martin@algesten.se>"]
 [dependencies]
 amqp = "0.0.19"
 clap = "2"
+conduit-mime-types = "0.7"
