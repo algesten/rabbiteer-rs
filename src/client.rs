@@ -6,6 +6,7 @@ extern crate amqp;
 use amqp::{Session, Options, Channel};
 use amqp::protocol::basic::BasicProperties;
 use amqp::Basic;
+use amqp::{Table, TableEntry};
 
 macro_rules! exitln(
     ($($arg:tt)*) => { {
@@ -19,18 +20,15 @@ pub struct Sendable {
     pub exchange: String,
     pub routing_key: String,
     pub content_type: String,
+    pub headers: Vec<String>,
     pub reader: Box<io::Read>,
 }
 
 fn _open(o:Options) -> (Session, Channel) {
-    let mut session = match Session::new(o) {
-        Ok(session) => session,
-        Err(error)  => exitln!("Failed opening amqp session: {:?}", error),
-    };
-    let channel = match session.open_channel(1) {
-        Ok(channel) => channel,
-        Err(error)  => exitln!("Failed opening amqp channel: {:?}", error),
-    };
+    let mut session = Session::new(o)
+        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
+    let channel = session.open_channel(1)
+        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
     (session, channel)
 }
 
@@ -42,20 +40,26 @@ pub fn open_send(o:Options, s:Sendable) {
     // immediate: bool,
     // properties: BasicProperties,
     // content: Vec<u8>
-    let props = BasicProperties { content_type: Some(s.content_type), ..Default::default() };
     let mut buffer = Vec::new();
     let mut reader = s.reader;
-    match reader.read_to_end(&mut buffer) {
-        Ok(_)      => (),
-        Err(error) => exitln!("Failed to read input: {:?}", error)
-    }
-    match channel.basic_publish(s.exchange, s.routing_key, false, false, props, buffer) {
-        Ok(_)      => (),
-        Err(error) => exitln!("Failed to send message: {:?}", error),
-    }
-    match channel.close(200, "Bye") {
-        Ok(_)      => (),
-        Err(error) => exitln!("Failed to close channel: {:?}", error),
+    let headers = s.headers.iter().fold(Table::new(), |mut h, st| {
+        let idx = st.find(':').expect("Header must have a :");
+        let (name, value) = st.split_at(idx);
+        let key = name.trim();
+        let val = (&value[1..]).trim();
+        h.insert(String::from(key), TableEntry::LongString(String::from(val)));
+        h
+    });
+    let props = BasicProperties {
+        content_type: Some(s.content_type),
+        headers: Some(headers),
+        ..Default::default()
     };
+    reader.read_to_end(&mut buffer)
+        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
+    channel.basic_publish(s.exchange, s.routing_key, false, false, props, buffer)
+        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
+    channel.close(200, "Bye")
+        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
     session.close(200, "Good Bye");
 }

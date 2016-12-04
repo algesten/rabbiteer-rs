@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::io::Write;
 use std::process;
 use std::fs;
 use std::io;
@@ -14,12 +15,21 @@ mod client;
 extern crate conduit_mime_types as mime;
 use mime::Types;
 
+macro_rules! exitln(
+    ($($arg:tt)*) => { {
+        let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
+        r.expect("failed printing to stderr");
+        process::exit(1);
+    } }
+);
+
 #[derive(Debug)]
 enum Oper {
     Publish {
         exchange: String,
         routing_key: String,
         content_type: String,
+        headers: Vec<String>,
         file: String,
     }
 }
@@ -47,9 +57,28 @@ impl Todo {
     }
 }
 
+fn unwrap_publish(parent:&ArgMatches) -> Oper {
+    let matches = parent.subcommand_matches("publish").unwrap();
+    Oper::Publish {
+        exchange:     value_t_or_exit!(matches.value_of("exchange"), String),
+        routing_key:  value_t_or_exit!(matches.value_of("routing_key"), String),
+        content_type: matches.value_of("content_type").unwrap_or("-").to_string(),
+        headers:      values_t!(matches.values_of("header"), String).unwrap_or(vec![]),
+        file:         value_t_or_exit!(matches.value_of("file"), String),
+    }
+}
+
+fn type_from_file(file:&String) -> String {
+    let t = Types::new()
+        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
+    let path = Path::new(&file);
+    let mime = t.mime_for_path(&path);
+    String::from(mime)
+}
+
 fn main() {
 
-    let app = App::new("Rabbiteer")
+    let matches = App::new("Rabbiteer")
         .version(crate_version!())
         .author("Martin Algesten <martin@algesten.se>")
         .about("Simple input/output tool for RabbitMQ")
@@ -96,6 +125,13 @@ fn main() {
                          .long("routing-key")
                          .takes_value(true)
                          .default_value(""))
+                    .arg(Arg::with_name("header")
+                         .help("Header on the form \"My-Header: Value\"")
+                         .short("H")
+                         .long("header")
+                         .takes_value(true)
+                         .number_of_values(1)
+                         .multiple(true))
                     .arg(Arg::with_name("file")
                          .help("Filename (- is stdin)")
                          .short("f")
@@ -108,19 +144,8 @@ fn main() {
                          .long("content-type")
                          .takes_value(true)
                     )
-        );
-
-    let matches = app.get_matches();
-
-    let unwrap_publish = |parent:&ArgMatches| {
-        let matches = parent.subcommand_matches("publish").unwrap();
-        Oper::Publish {
-            exchange:     value_t_or_exit!(matches.value_of("exchange"), String),
-            routing_key:  value_t_or_exit!(matches.value_of("routing_key"), String),
-            content_type: matches.value_of("content_type").unwrap_or("-").to_string(),
-            file:         value_t_or_exit!(matches.value_of("file"), String),
-        }
-    };
+        )
+        .get_matches();
 
     let todo = Todo {
         host:     value_t_or_exit!(matches.value_of("host"), String),
@@ -130,38 +155,28 @@ fn main() {
         vhost:    value_t_or_exit!(matches.value_of("vhost"), String),
         oper:  match matches.subcommand_name() {
             Some("publish") => unwrap_publish(&matches),
-            _ => {
-                println!("error: Need subcommand. Try --help");
-                process::exit(1);
-            },
+            _ => exitln!("Error: Need subcommand. Try --help"),
         }
     };
 
     let opts = todo.to_opts();
 
     match todo.oper {
-        Oper::Publish { exchange, routing_key, content_type, file } => {
+        Oper::Publish { exchange, routing_key, content_type, headers, file } => {
             let reader: Box<io::Read> = match file.as_ref() {
                 "-" => Box::new(io::stdin()),
-                _   => Box::new(fs::File::open(file.clone()).unwrap())
-            };
-            let type_from_file = |file:String| {
-                let t = match Types::new() {
-                    Ok(types)  => types,
-                    Err(error) => panic!("Failed reading types {:?}", error),
-                };
-                let path = Path::new(&file);
-                let mime = t.mime_for_path(&path);
-                return String::from(mime);
+                _   => Box::new(fs::File::open(&file)
+                                .unwrap_or_else(|e| exitln!("Error: {}", e))),
             };
             let content_type = match content_type.as_ref() {
-                "-" => type_from_file(file),
+                "-" => type_from_file(&file),
                 _   => content_type,
             };
             let sendable = client::Sendable {
                 exchange: exchange,
                 routing_key: routing_key,
                 content_type: content_type,
+                headers: headers,
                 reader: reader,
             };
             client::open_send(opts, sendable);
