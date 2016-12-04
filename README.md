@@ -6,7 +6,7 @@ It's early days, the tool can publish.
 ### General opts
 
 ```
-$ ./target/debug/rabbiteer --help
+$ rabbiteer --help
 Rabbiteer 0.1.0
 Martin Algesten <martin@algesten.se>
 Simple input/output tool for RabbitMQ
@@ -33,7 +33,7 @@ SUBCOMMANDS:
 ### Publish
 
 ```
-$ ./target/debug/rabbiteer publish --help
+$ rabbiteer publish --help
 rabbiteer-publish 
 Publish data to an exchange
 
