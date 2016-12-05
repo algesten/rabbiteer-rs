@@ -40,8 +40,6 @@ pub fn open_send(o:Options, s:Sendable) {
     // immediate: bool,
     // properties: BasicProperties,
     // content: Vec<u8>
-    let mut buffer = Vec::new();
-    let mut reader = s.reader;
     let headers = s.headers.iter().fold(Table::new(), |mut h, st| {
         let idx = st.find(':').expect("Header must have a :");
         let (name, value) = st.split_at(idx);
@@ -55,9 +53,11 @@ pub fn open_send(o:Options, s:Sendable) {
         headers: Some(headers),
         ..Default::default()
     };
+    let mut buffer = Box::new(vec![]);
+    let mut reader = s.reader;
     reader.read_to_end(&mut buffer)
         .unwrap_or_else(|e| exitln!("Error: {:?}", e));
-    channel.basic_publish(s.exchange, s.routing_key, false, false, props, buffer)
+    channel.basic_publish(s.exchange, s.routing_key, false, false, props, *buffer)
         .unwrap_or_else(|e| exitln!("Error: {:?}", e));
     channel.close(200, "Bye")
         .unwrap_or_else(|e| exitln!("Error: {:?}", e));
