@@ -54,6 +54,14 @@ OPTIONS:
 
 ### Example
 
+From stdin. Provide the content-type as arg.
+
+```
+echo "{\"panda\":true}" | ./rabbiteer -l admin -p admin -v prod publish -e jsonin -c application/json
+```
+
+From a file. Content-type is inferred if possible.
+
 ```
 $ rabbiteer -l admin -p admin -v prod publish -e jsonin -H "batch: true" -f ./foo.json
 ```
