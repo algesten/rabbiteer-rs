@@ -1,6 +1,6 @@
 [root]
 name = "rabbiteer"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "amqp 0.0.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.19.1 (registry+https://github.com/rust-lang/crates.io-index)",
