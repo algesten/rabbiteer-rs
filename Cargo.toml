@@ -1,6 +1,6 @@
 [package]
 name = "rabbiteer"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Martin Algesten <martin@algesten.se>"]
 description = "AMQP/RabbitMQ input/output CLI tool"
 repository = "https://github.com/algesten/rabbiteer-rs"
@@ -9,6 +9,9 @@ keywords = ["amqp", "rabbitmq"]
 readme = "README.md"
 
 [dependencies]
-amqp = "0.0.19"
 clap = "2"
 conduit-mime-types = "0.7"
+
+[dependencies.amqp]
+version = "0.0.19"
+default-features = false
