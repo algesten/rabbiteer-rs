@@ -34,12 +34,6 @@ fn _open(o:Options) -> (Session, Channel) {
 
 pub fn open_send(o:Options, s:Sendable) {
     let (mut session, mut channel) = _open(o);
-    // exchange: S,
-    // routing_key: S,
-    // mandatory: bool,
-    // immediate: bool,
-    // properties: BasicProperties,
-    // content: Vec<u8>
     let headers = s.headers.iter().fold(Table::new(), |mut h, st| {
         let idx = st.find(':').expect("Header must have a :");
         let (name, value) = st.split_at(idx);

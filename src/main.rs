@@ -23,6 +23,8 @@ macro_rules! exitln(
     } }
 );
 
+// helper function to turn a filename
+// into a mime-type
 fn type_from_file(file:&String) -> String {
     let t = Types::new()
         .unwrap_or_else(|e| exitln!("Error: {:?}", e));
@@ -30,6 +32,7 @@ fn type_from_file(file:&String) -> String {
     let mime = t.mime_for_path(&path);
     String::from(mime)
 }
+
 
 fn main() {
 
@@ -124,71 +127,86 @@ fn main() {
         )
         .get_matches();
 
-    fn to_opts(matches:&ArgMatches) -> amqp::Options {
-        amqp::Options {
-            host:     value_t_or_exit!(matches.value_of("host"), String),
-            port:     value_t_or_exit!(matches.value_of("port"), u16),
-            login:    value_t_or_exit!(matches.value_of("login"), String),
-            password: value_t_or_exit!(matches.value_of("password"), String),
-            vhost:    value_t_or_exit!(matches.value_of("vhost"), String),
-            ..Default::default()
-        }
-    }
-
     // global opts, before "publish or "subscribe"
-    let opts = to_opts(&matches);
+    let opts = amqp::Options {
+        host:     value_t_or_exit!(matches.value_of("host"), String),
+        port:     value_t_or_exit!(matches.value_of("port"), u16),
+        login:    value_t_or_exit!(matches.value_of("login"), String),
+        password: value_t_or_exit!(matches.value_of("password"), String),
+        vhost:    value_t_or_exit!(matches.value_of("vhost"), String),
+        ..Default::default()
+    };
 
+    // depending on subcommand, we do one or the other
     match matches.subcommand_name() {
 
-        // execute publish comman
+        // execute publish command
         Some("publish") => {
 
-            // after the command
+            // the args after the "publish command
             let subm = matches.subcommand_matches("publish").unwrap();
 
-            // either stdin or a file
-            let file = value_t_or_exit!(subm.value_of("file"), String);
-            let reader: Box<io::Read> = {
-                match file.as_ref() {
-                    "-" => Box::new(io::stdin()),
-                    _   => Box::new(fs::File::open(&file)
-                                    .unwrap_or_else(|e| exitln!("Error: {}", e))),
-                }
-            };
+            do_publish(opts, subm);
 
-            // figure out a good content type
-            // XXX should we fall back on binary octet-stream?
-            let content_type = {
-                let c = subm.value_of("content_type").unwrap_or("-").to_string();
-                match c.as_ref() {
-                    "-" => type_from_file(&file),
-                    _   => c,
-                }
-            };
-
-            // the sendable wraps up the parsed parts
-            let sendable = client::Sendable {
-                exchange: value_t_or_exit!(subm.value_of("exchange"), String),
-                routing_key: value_t_or_exit!(subm.value_of("routing_key"), String),
-                content_type: content_type,
-                headers: values_t!(subm.values_of("header"), String).unwrap_or(vec![]),
-                reader: reader,
-            };
-
-            // ship it
-            client::open_send(opts, sendable);
         },
 
+        // execute subscribe command
         Some("subscribe") => {
 
+            // the args after the "subscribe" command
             let subm = matches.subcommand_matches("subscribe").unwrap();
-            let exchange = value_t_or_exit!(subm.value_of("exchange"), String);
-            let routing_key = value_t_or_exit!(subm.value_of("routing_key"), String);
-            let output = value_t_or_exit!(subm.value_of("output"), String);
+
+            do_subscribe(opts, subm);
 
         },
 
         _ => exitln!("Error: Need subcommand. Try --help"),
     };
+
+}
+
+fn do_publish(opts:amqp::Options, matches:&ArgMatches) {
+
+    // either stdin or a file
+    let file = value_t_or_exit!(matches.value_of("file"), String);
+    let reader: Box<io::Read> = {
+        match file.as_ref() {
+            "-" => Box::new(io::stdin()),
+            _   => Box::new(fs::File::open(&file)
+                            .unwrap_or_else(|e| exitln!("Error: {}", e))),
+        }
+    };
+
+    // figure out a good content type
+    // XXX should we fall back on binary octet-stream?
+    let content_type = {
+        let c = matches.value_of("content_type").unwrap_or("-").to_string();
+        match c.as_ref() {
+            "-" => type_from_file(&file),
+            _   => c,
+        }
+    };
+
+    // the sendable wraps up the parsed parts
+    let sendable = client::Sendable {
+        exchange: value_t_or_exit!(matches.value_of("exchange"), String),
+        routing_key: value_t_or_exit!(matches.value_of("routing_key"), String),
+        content_type: content_type,
+        headers: values_t!(matches.values_of("header"), String).unwrap_or(vec![]),
+        reader: reader,
+    };
+
+    // ship it
+    client::open_send(opts, sendable);
+
+}
+
+
+
+fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) {
+
+    let exchange = value_t_or_exit!(matches.value_of("exchange"), String);
+    let routing_key = value_t_or_exit!(matches.value_of("routing_key"), String);
+    let output = value_t_or_exit!(matches.value_of("output"), String);
 
 }
