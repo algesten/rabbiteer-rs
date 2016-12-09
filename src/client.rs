@@ -79,11 +79,14 @@ impl amqp::Consumer for Receiver {
     fn handle_delivery(&mut self, channel:&mut Channel, deliver:Deliver,
                        headers:BasicProperties, body:Vec<u8>){
 
-        // ack it, not that we're in ack mode...
-        channel.basic_ack(deliver.delivery_tag, false).unwrap();
+        let delivery_tag = deliver.delivery_tag.clone();
 
         // and deliver to callback
-        (self.callback)(deliver, headers, body)
+        (self.callback)(deliver, headers, body);
+
+        // ack it. not that we're in ack mode...
+        channel.basic_ack(delivery_tag, false).unwrap();
+
     }
 }
 
