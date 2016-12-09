@@ -10,7 +10,9 @@ readme = "README.md"
 
 [dependencies]
 clap = "2"
+rand = "*"
 conduit-mime-types = "0.7"
+rustc-serialize = "0.3"
 
 [dependencies.amqp]
 version = "0.0.19"
