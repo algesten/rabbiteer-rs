@@ -2,12 +2,10 @@ extern crate rustc_serialize;
 extern crate amqp;
 extern crate rand;
 extern crate conduit_mime_types as mime;
+#[macro_use] extern crate clap;
 
 use std::io::Write;
 use std::process;
-
-#[macro_use]
-extern crate clap;
 use clap::{Arg, App, SubCommand};
 
 mod client;

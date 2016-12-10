@@ -24,22 +24,15 @@ pub struct Sendable {
     pub reader: Box<io::Read>,
 }
 
-fn _open(o:Options) -> (Session, Channel) {
-    let mut session = Session::new(o)
-        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
-    let channel = session.open_channel(1)
-        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
-    (session, channel)
-}
-
 pub fn open_send(o:Options, s:Sendable) {
     let (mut session, mut channel) = _open(o);
     let mut headers = s.headers.iter().fold(Table::new(), |mut h, st| {
         let idx = st.find(':').expect("Header must have a :");
         let (name, value) = st.split_at(idx);
         let key = name.trim();
-        let val = (&value[1..]).trim();
-        h.insert(String::from(key), TableEntry::LongString(String::from(val)));
+        let valstr = (&value[1..]).trim();
+        let val = narrow(valstr);
+        h.insert(String::from(key), val);
         h
     });
     if s.file_name != "-" && !headers.contains_key("fileName") {
@@ -59,6 +52,32 @@ pub fn open_send(o:Options, s:Sendable) {
     channel.close(200, "Bye")
         .unwrap_or_else(|e| exitln!("Error: {:?}", e));
     session.close(200, "Good Bye");
+}
+
+
+// narrow the string to a TableEntry type by trying to parse to known
+// JSON types: bool, double and fall back on string.
+fn narrow(str:&str) -> TableEntry {
+    let boolv = str.parse::<bool>();
+    if !boolv.is_err() {
+        TableEntry::Bool(boolv.unwrap())
+    } else {
+        let doublev = str.parse::<f64>();
+        if !doublev.is_err() {
+            TableEntry::Double(doublev.unwrap())
+        } else {
+            TableEntry::LongString(str.to_owned())
+        }
+    }
+}
+
+
+fn _open(o:Options) -> (Session, Channel) {
+    let mut session = Session::new(o)
+        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
+    let channel = session.open_channel(1)
+        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
+    (session, channel)
 }
 
 
@@ -120,9 +139,5 @@ pub fn open_receive(o:Options, r:Receiver) {
 
     // and go!
     channel.start_consuming();
-
-    //    channel.close(200, "Bye")
-    //        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
-    //    session.close(200, "Good Bye");
 
 }
