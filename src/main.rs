@@ -306,7 +306,13 @@ fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) {
                 let file_name = file_name_of(&props, &types);
 
                 // path relative to output dir
+                let outdir = Path::new(&output);
                 let path = Path::new(&output).join(file_name);
+
+                // don't allow writes outside this dir
+                if outdir != path.parent().unwrap() {
+                    exitln!("Error: fileName writes outside -o dir: {}", path.to_str().unwrap());
+                }
 
                 let mut f = fs::File::create(path).expect("Unable to create file");
                 f.write_all(&msg).expect("Unable to write data");
