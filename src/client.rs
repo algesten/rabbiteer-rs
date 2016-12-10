@@ -1,9 +1,7 @@
 use std::process;
-use std::io;
-use std::io::Write;
+use std::io::{self, Write};
 
-extern crate amqp;
-use amqp::{Session, Options, Channel};
+use amqp::{self, Session, Options, Channel};
 use amqp::protocol::basic::{Deliver, BasicProperties};
 use amqp::Basic;
 use amqp::{Table, TableEntry};
