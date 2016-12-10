@@ -2,7 +2,7 @@
 name = "rabbiteer"
 version = "0.2.0"
 dependencies = [
- "amqp 0.0.19 (git+https://github.com/algesten/rust-amqp)",
+ "amqp 0.0.19 (git+https://github.com/algesten/rust-amqp?branch=rabbiteer)",
  "clap 2.19.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "conduit-mime-types 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -20,7 +20,7 @@ dependencies = [
 [[package]]
 name = "amqp"
 version = "0.0.19"
-source = "git+https://github.com/algesten/rust-amqp#275a93921f24b847a612fc667baf9bdf99fa8009"
+source = "git+https://github.com/algesten/rust-amqp?branch=rabbiteer#07ce27b8f4409b5f4d6c345f4249aa7468f7c962"
 dependencies = [
  "bit-vec 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -280,7 +280,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [metadata]
 "checksum aho-corasick 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)" = "ca972c2ea5f742bfce5687b9aef75506a764f61d37f8f649047846a9686ddb66"
-"checksum amqp 0.0.19 (git+https://github.com/algesten/rust-amqp)" = "<none>"
+"checksum amqp 0.0.19 (git+https://github.com/algesten/rust-amqp?branch=rabbiteer)" = "<none>"
 "checksum ansi_term 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "23ac7c30002a5accbf7e8987d0632fa6de155b7c3d39d0067317a391e00a2ef6"
 "checksum bit-vec 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)" = "5b97c2c8e8bbb4251754f559df8af22fb264853c7d009084a576cdf12565089d"
 "checksum bitflags 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "aad18937a628ec6abcd26d1489012cc0e18c21798210f491af69ded9b881106d"
