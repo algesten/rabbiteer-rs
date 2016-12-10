@@ -15,5 +15,7 @@ conduit-mime-types = "0.7"
 rustc-serialize = "0.3"
 
 [dependencies.amqp]
-version = "0.0.19"
+git = "https://github.com/algesten/rust-amqp"
+#path = "/Users/martin/dev/_dist/rust-amqp"
+#version = "0.0.19"
 default-features = false

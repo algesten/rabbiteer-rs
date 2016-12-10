@@ -261,7 +261,7 @@ fn file_name_of(props:&BasicProperties, types:&mime::Types) -> String {
 fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) {
 
     let output = value_t_or_exit!(matches.value_of("output"), String);
-    let info = value_t!(matches.value_of("info"), bool).unwrap_or(false);
+    let info = matches.is_present("info");
 
     // type lookup map
     let types = mime::Types::new()
@@ -280,7 +280,7 @@ fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) {
 
     let receive = move |deliver:Deliver, props:BasicProperties, body:Vec<u8>| {
 
-        let msg = build_output(&info, &deliver, &props, body);
+        let msg = build_output(info, &deliver, &props, body);
 
         match output.as_ref() {
             "-" => {
@@ -325,10 +325,8 @@ fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) {
 
 }
 
-use std::collections::BTreeMap;
-
 extern crate rustc_serialize;
-use rustc_serialize::json::{self, Json};
+use rustc_serialize::json::{self, Json, Object};
 
 #[derive(RustcEncodable)]
 struct MsgDeliver {
@@ -342,7 +340,7 @@ struct MsgDeliver {
 #[derive(RustcEncodable)]
 struct MsgProps {
     content_type: String,
-    headers: BTreeMap<String, String>,
+    headers: Object,
 }
 
 #[derive(RustcEncodable)]
@@ -352,44 +350,99 @@ struct Msg {
     data: Json,
 }
 
-fn build_output(info:&bool, deliver:&Deliver, props:&BasicProperties, body:Vec<u8>) -> Vec<u8> {
-    match info {
-        &false => body,
-        &true => {
+fn build_output(info:bool, deliver:&Deliver, props:&BasicProperties, body:Vec<u8>) -> Vec<u8> {
+    if info {
 
-            // delivery info
-            let mdel = MsgDeliver {
-                consumer_tag:deliver.consumer_tag.clone(),
-                delivery_tag:deliver.delivery_tag.clone(),
-                redelivered:deliver.redelivered.clone(),
-                exchange:deliver.exchange.clone(),
-                routing_key:deliver.routing_key.clone(),
-            };
+        // delivery info
+        let mdel = MsgDeliver {
+            consumer_tag:deliver.consumer_tag.clone(),
+            delivery_tag:deliver.delivery_tag.clone(),
+            redelivered:deliver.redelivered.clone(),
+            exchange:deliver.exchange.clone(),
+            routing_key:deliver.routing_key.clone(),
+        };
 
-            let content_type = props.clone().content_type.unwrap_or(String::from(""));
+        let content_type = props.clone().content_type.unwrap_or(String::from(""));
 
-            // properties
-            let mprops = MsgProps {
-                content_type:content_type.clone(),
-                headers: BTreeMap::new(),
-            };
+        // properties
+        let mut mprops = MsgProps {
+            content_type:content_type.clone(),
+            headers: Object::new(),
+        };
 
-            // the body
-            let data = figure_out_body(content_type, body);
+        if let Some(table) = props.headers.clone() {
+            for (skey, entry) in table {
+                let key = skey.to_owned();
+                match entry {
+                    TableEntry::Bool(v) => {
+                        mprops.headers.insert(key, Json::Boolean(v));
+                    },
+                    TableEntry::ShortShortInt(v) => {
+                        mprops.headers.insert(key, Json::I64(v as i64));
+                    },
+                    TableEntry::ShortShortUint(v) => {
+                        mprops.headers.insert(key, Json::U64(v as u64));
+                    },
+                    TableEntry::ShortInt(v) => {
+                        mprops.headers.insert(key, Json::I64(v as i64));
+                    },
+                    TableEntry::ShortUint(v) => {
+                        mprops.headers.insert(key, Json::U64(v as u64));
+                    },
+                    TableEntry::LongInt(v) => {
+                        mprops.headers.insert(key, Json::I64(v as i64));
+                    },
+                    TableEntry::LongUint(v) => {
+                        mprops.headers.insert(key, Json::U64(v as u64));
+                    },
+                    TableEntry::LongLongInt(v) => {
+                        mprops.headers.insert(key, Json::I64(v));
+                    },
+                    TableEntry::LongLongUint(v) => {
+                        mprops.headers.insert(key, Json::U64(v));
+                    },
+                    TableEntry::Float(v) => {
+                        mprops.headers.insert(key, Json::F64(v as f64));
+                    },
+                    TableEntry::Double(v) => {
+                        mprops.headers.insert(key, Json::F64(v));
+                    },
+                    TableEntry::LongString(v) => {
+                        mprops.headers.insert(key, Json::String(v));
+                    },
+                    TableEntry::Void => {
+                        mprops.headers.insert(key, Json::Null);
+                    },
+                    _ => (),
+                    // ShortString(String),
+                    // TableEntry::FieldTable(Table) =>
+                    // TableEntry::Timestamp(u64) =>
+                    // TableEntry::FieldArray(Vec<TableEntry>) =>
+                    // TableEntry::DecimalValue(u8, u32) => mprops.headers.insert(key, v),
+                };
+            }
+        }
 
-            // and put it together
-            let msg = Msg {
-                deliver:mdel,
-                props:mprops,
-                data:data,
-            };
+        // the body
+        let data = figure_out_body(content_type, body);
 
-            // encode
-            let js = json::encode(&msg).unwrap();
+        // and put it together
+        let msg = Msg {
+            deliver:mdel,
+            props:mprops,
+            data:data,
+        };
 
-            // convert to bytes
-            js.to_string().as_bytes().to_owned()
-        },
+        // encode
+        let js = json::encode(&msg).unwrap();
+
+        // convert to bytes
+        js.to_string().as_bytes().to_owned()
+
+    } else {
+
+        body
+
     }
 }
 
