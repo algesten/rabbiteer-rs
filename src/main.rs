@@ -51,10 +51,11 @@ fn main() {
              .long("port")
              .takes_value(true)
              .default_value("5672"))
-        .arg(Arg::with_name("login")
-             .help("Login to authenticate with")
-             .short("l")
-             .long("login")
+        .arg(Arg::with_name("user")
+             .help("User to authenticate with")
+             .short("u")
+             .alias("l")
+             .long("user")
              .takes_value(true)
              .default_value("guest"))
         .arg(Arg::with_name("password")
@@ -115,7 +116,7 @@ fn main() {
                          .short("r")
                          .long("routing-key")
                          .takes_value(true)
-                         .default_value(""))
+                         .default_value("#"))
                     .arg(Arg::with_name("output")
                          .help("Output directory (- is stdout)")
                          .short("o")
@@ -133,7 +134,7 @@ fn main() {
     let opts = amqp::Options {
         host:     value_t_or_exit!(matches.value_of("host"), String),
         port:     value_t_or_exit!(matches.value_of("port"), u16),
-        login:    value_t_or_exit!(matches.value_of("login"), String),
+        login:    value_t_or_exit!(matches.value_of("user"), String),
         password: value_t_or_exit!(matches.value_of("password"), String),
         vhost:    value_t_or_exit!(matches.value_of("vhost"), String),
         ..Default::default()
@@ -327,6 +328,7 @@ fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) {
 
 extern crate rustc_serialize;
 use rustc_serialize::json::{self, Json, Object};
+use rustc_serialize::base64::{self, ToBase64};
 
 #[derive(RustcEncodable)]
 struct MsgDeliver {
@@ -362,7 +364,7 @@ fn build_output(info:bool, deliver:&Deliver, props:&BasicProperties, body:Vec<u8
             routing_key:deliver.routing_key.clone(),
         };
 
-        let content_type = props.clone().content_type.unwrap_or(String::from(""));
+        let content_type = props.content_type.clone().unwrap_or(String::from(""));
 
         // properties
         let mut mprops = MsgProps {
@@ -434,42 +436,57 @@ fn build_output(info:bool, deliver:&Deliver, props:&BasicProperties, body:Vec<u8
         };
 
         // encode
-        let js = json::encode(&msg).unwrap();
+        let js = json::as_pretty_json(&msg);
 
         // convert to bytes
         js.to_string().as_bytes().to_owned()
 
     } else {
 
-        body
+        let content_type = props.content_type.clone().unwrap_or(String::from(""));
+
+        match content_type.as_ref() {
+            "application/json" => {
+                // interpret body
+                let body = figure_out_body(content_type, body);
+
+                // encode
+                let js = json::as_pretty_json(&body);
+
+                // convert to bytes
+                js.to_string().as_bytes().to_owned()
+            },
+            _ => body
+        }
 
     }
 }
 
 
-fn figure_out_body(content_type:String,body:Vec<u8>) -> Json {
-
-    // interpret body as a string
-    let jstr = || -> String {
-        String::from_utf8(body)
-            .unwrap_or_else(|e| exitln!("Error: {:?}", e))
-    };
+fn figure_out_body(content_type:String, body:Vec<u8>) -> Json {
 
     // interpret body as a binary and base64 encode
-    let as_base64 = move || -> Json {
-        Json::String(String::from("asbase64"))
-    };
+    fn as_base64(body:Vec<u8>) -> Json {
+        Json::String(body.to_base64(base64::STANDARD))
+    }
+
+    fn read_str(body:Vec<u8>) -> String {
+        String::from_utf8(body).unwrap_or_else(|e| exitln!("Error: {:?}", e))
+    }
 
     // depending on content type, do something
     match content_type.as_ref() {
-        "application/json" => Json::from_str(&jstr())
-            .unwrap_or_else(|e| exitln!("Error: {:?}", e)),
+        "application/json" => {
+            Json::from_str(&read_str(body)).unwrap_or_else(|e| exitln!("Error: {:?}", e))
+        },
         _ => match content_type.find("text/") {
             Some(idx) => match idx == 0 {
-                true => Json::String(String::from(jstr())),
-                false => as_base64()
+                true => {
+                    Json::String(read_str(body))
+                },
+                false => as_base64(body)
             },
-            _ => as_base64()
+            _ => as_base64(body)
         }
     }
 
