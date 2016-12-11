@@ -6,13 +6,6 @@ use amqp::protocol::basic::{Deliver, BasicProperties};
 use amqp::Basic;
 use amqp::{Table, TableEntry};
 
-macro_rules! exitln(
-    ($($arg:tt)*) => { {
-        let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
-        r.expect("failed printing to stderr");
-        process::exit(1);
-    } }
-);
 
 
 pub struct Sendable {

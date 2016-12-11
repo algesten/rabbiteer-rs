@@ -5,14 +5,6 @@ use amqp::TableEntry;
 use std::io::Write;
 use std::process;
 
-macro_rules! exitln(
-    ($($arg:tt)*) => { {
-        let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
-        r.expect("failed printing to stderr");
-        process::exit(1);
-    } }
-);
-
 #[derive(RustcEncodable)]
 struct MsgDeliver {
     consumer_tag: String,

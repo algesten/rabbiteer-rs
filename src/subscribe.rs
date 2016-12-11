@@ -10,14 +10,6 @@ use mime;
 use client;
 use output;
 
-macro_rules! exitln(
-    ($($arg:tt)*) => { {
-        let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
-        r.expect("failed printing to stderr");
-        process::exit(1);
-    } }
-);
-
 
 
 pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) {

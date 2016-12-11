@@ -13,11 +13,6 @@ use clap::{Arg, App, SubCommand};
 use url::Url;
 use rustc_serialize::json::Json;
 
-mod client;
-mod output;
-mod publish;
-mod subscribe;
-
 macro_rules! errln(
     ($($arg:tt)*) => { {
         writeln!(&mut ::std::io::stderr(), $($arg)*).expect("failed printing to stderr");
@@ -31,6 +26,10 @@ macro_rules! exitln(
     } }
 );
 
+mod client;
+mod output;
+mod publish;
+mod subscribe;
 
 
 

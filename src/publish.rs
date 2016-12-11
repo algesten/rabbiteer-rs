@@ -7,14 +7,6 @@ use std::path::Path;
 use mime;
 use client;
 
-macro_rules! exitln(
-    ($($arg:tt)*) => { {
-        let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
-        r.expect("failed printing to stderr");
-        process::exit(1);
-    } }
-);
-
 
 // helper function to turn a filename
 // into a mime-type
