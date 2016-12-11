@@ -141,9 +141,9 @@ fn _main() -> Result<(),RbtError> {
     } else {
         // we use the CONF env first, and if
         // that doesn't work out, we fall back on
-        // RABBITEER_URL
+        // AMQP_URL
         if !parse_conf(&mut opts) {
-            if let Ok(urlstr) = env::var("RABBITEER_URL") {
+            if let Ok(urlstr) = env::var("AMQP_URL") {
                 try!(parse_url(&mut opts, urlstr));
             }
         }

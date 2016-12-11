@@ -35,13 +35,13 @@ The command has two "modes", `publish` and `subscribe`.
 
 ### Environment variables
 
-#### RABBITEER_URL
+#### AMQP_URL
 
-The connection string can be set using the `RABBITEER_URL` environment
+The connection string can be set using the `AMQP_URL` environment
 variable.
 
 ```
-$ export RABBITEER_URL="amqp://joe:secret@myspecialhost/somevhost"
+$ export AMQP_URL="amqp://joe:secret@myspecialhost/somevhost"
 $ rabbiteer subscribe -e ttninjs-batch
 ```
 
