@@ -18,10 +18,15 @@ mod output;
 mod publish;
 mod subscribe;
 
+macro_rules! errln(
+    ($($arg:tt)*) => { {
+        writeln!(&mut ::std::io::stderr(), $($arg)*).expect("failed printing to stderr");
+    } }
+);
+
 macro_rules! exitln(
     ($($arg:tt)*) => { {
-        let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
-        r.expect("failed printing to stderr");
+        errln!($($arg)*);
         process::exit(1);
     } }
 );
@@ -154,6 +159,9 @@ fn main() {
             }
         }
     }
+
+    errln!("Connecting to amqp://{}:{}@{}:{}/{}",
+           opts.login, opts.password, opts.host, opts.port, opts.vhost);
 
     // depending on subcommand, we do one or the other
     match matches.subcommand_name() {
