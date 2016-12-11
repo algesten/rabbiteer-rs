@@ -13,6 +13,7 @@ clap = "2"
 rand = "*"
 conduit-mime-types = "0.7"
 rustc-serialize = "0.3"
+url = "*"
 
 [dependencies.amqp]
 git = "https://github.com/algesten/rust-amqp"

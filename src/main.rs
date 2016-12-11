@@ -2,11 +2,13 @@ extern crate rustc_serialize;
 extern crate amqp;
 extern crate rand;
 extern crate conduit_mime_types as mime;
+extern crate url;
 #[macro_use] extern crate clap;
 
 use std::io::Write;
 use std::process;
 use clap::{Arg, App, SubCommand};
+use url::Url;
 
 mod client;
 mod output;
@@ -38,6 +40,7 @@ fn main() {
              .default_value("127.0.0.1"))
         .arg(Arg::with_name("port")
              .help("Port to connect to")
+             .short("P")
              .long("port")
              .takes_value(true)
              .default_value("5672"))
@@ -59,7 +62,12 @@ fn main() {
              .short("v")
              .long("vhost")
              .takes_value(true)
-             .default_value("guest"))
+             .default_value(""))
+        .arg(Arg::with_name("url")
+             .help("AMQP connection url (amqp://user:pass@host:port/vhost)")
+             .short("U")
+             .long("url")
+             .takes_value(true))
         .subcommand(SubCommand::with_name("publish")
                     .about("Publish data to an exchange")
                     .arg(Arg::with_name("exchange")
@@ -121,7 +129,7 @@ fn main() {
         .get_matches();
 
     // global opts, before "publish or "subscribe"
-    let opts = amqp::Options {
+    let mut opts = amqp::Options {
         host:     value_t_or_exit!(matches.value_of("host"), String),
         port:     value_t_or_exit!(matches.value_of("port"), u16),
         login:    value_t_or_exit!(matches.value_of("user"), String),
@@ -129,6 +137,32 @@ fn main() {
         vhost:    value_t_or_exit!(matches.value_of("vhost"), String),
         ..Default::default()
     };
+
+    // url overrides the defaults
+    if let Ok(urlstr) = value_t!(matches.value_of("url"), String) {
+        if let Ok(url) = Url::parse(urlstr.as_ref()) {
+            if url.scheme() != "amqp" {
+                exitln!("Unknown scheme: {}", url);
+            }
+            if let Some(host) = url.host_str() {
+                opts.host = host.to_owned();
+            }
+            if let Some(port) = url.port() {
+                opts.port = port;
+            }
+            if url.username() != "" {
+                opts.login = url.username().to_owned();
+            }
+            if let Some(password) = url.password() {
+                opts.password = password.to_owned();
+            }
+            if let Some(mut segs) = url.path_segments() {
+                if let Some(vhost) = segs.nth(0) {
+                    opts.vhost = vhost.to_owned();
+                }
+            }
+        }
+    }
 
     // depending on subcommand, we do one or the other
     match matches.subcommand_name() {
