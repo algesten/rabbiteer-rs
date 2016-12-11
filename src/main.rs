@@ -5,8 +5,7 @@ extern crate conduit_mime_types as mime;
 extern crate url;
 #[macro_use] extern crate clap;
 
-mod error;
-#[macro_use] mod macros;
+#[macro_use] mod error;
 mod client;
 mod output;
 mod publish;
@@ -21,12 +20,7 @@ use error::RbtError;
 
 
 fn main() {
-
-    _main().unwrap_or_else(|err| {
-        errln!("Error: {:?}", err);
-        ::std::process::exit(1);
-    });
-
+    _main().unwrap_or_else(error::handle);
 }
 
 fn _main() -> Result<(),RbtError> {
@@ -155,9 +149,6 @@ fn _main() -> Result<(),RbtError> {
         }
     }
 
-    errln!("Connecting to amqp://{}:{}@{}:{}/{}",
-           opts.login, opts.password, opts.host, opts.port, opts.vhost);
-
     // depending on subcommand, we do one or the other
     match matches.subcommand_name() {
 
@@ -181,7 +172,7 @@ fn _main() -> Result<(),RbtError> {
 
         },
 
-        _ => rbterr!("Error: Need subcommand. Try --help"),
+        _ => rbterr!("Need subcommand. Try --help"),
     }
 
 }

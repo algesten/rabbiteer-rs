@@ -64,6 +64,8 @@ fn narrow(str:&str) -> TableEntry {
 
 
 fn _open(o:Options) -> Result<(Session, Channel),RbtError> {
+    errln!("Connecting to amqp://{}:{}@{}:{}/{}",
+           o.login, o.password, o.host, o.port, o.vhost);
     let mut session = try!(Session::new(o));
     let channel = try!(session.open_channel(1));
     Ok((session, channel))
@@ -84,10 +86,7 @@ impl amqp::Consumer for Receiver {
         let delivery_tag = deliver.delivery_tag.clone();
 
         // and deliver to callback
-        ((self.callback)(deliver, headers, body)).unwrap_or_else(|err| {
-            errln!("Error: {:?}", err);
-            ::std::process::exit(1);
-        });
+        ((self.callback)(deliver, headers, body)).unwrap_or_else(::error::handle);
 
         // ack it. not that we're in ack mode...
         channel.basic_ack(delivery_tag, false).unwrap();
