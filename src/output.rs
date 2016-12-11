@@ -2,8 +2,8 @@ use rustc_serialize::json::{self, Json, Object};
 use rustc_serialize::base64::{self, ToBase64};
 use amqp::protocol::basic::{Deliver, BasicProperties};
 use amqp::TableEntry;
-use std::io::Write;
-use std::process;
+use error::RbtError;
+
 
 #[derive(RustcEncodable)]
 struct MsgDeliver {
@@ -27,7 +27,8 @@ struct Msg {
     data: Json,
 }
 
-pub fn build_output(info:bool, deliver:&Deliver, props:&BasicProperties, body:Vec<u8>) -> Vec<u8> {
+pub fn build_output(info:bool, deliver:&Deliver,
+                    props:&BasicProperties, body:Vec<u8>) -> Result<Vec<u8>,RbtError> {
     if info {
 
         // delivery info
@@ -50,58 +51,13 @@ pub fn build_output(info:bool, deliver:&Deliver, props:&BasicProperties, body:Ve
         if let Some(table) = props.headers.clone() {
             for (skey, entry) in table {
                 let key = skey.to_owned();
-                match entry {
-                    TableEntry::Bool(v) => {
-                        mprops.headers.insert(key, Json::Boolean(v));
-                    },
-                    TableEntry::ShortShortInt(v) => {
-                        mprops.headers.insert(key, Json::I64(v as i64));
-                    },
-                    TableEntry::ShortShortUint(v) => {
-                        mprops.headers.insert(key, Json::U64(v as u64));
-                    },
-                    TableEntry::ShortInt(v) => {
-                        mprops.headers.insert(key, Json::I64(v as i64));
-                    },
-                    TableEntry::ShortUint(v) => {
-                        mprops.headers.insert(key, Json::U64(v as u64));
-                    },
-                    TableEntry::LongInt(v) => {
-                        mprops.headers.insert(key, Json::I64(v as i64));
-                    },
-                    TableEntry::LongUint(v) => {
-                        mprops.headers.insert(key, Json::U64(v as u64));
-                    },
-                    TableEntry::LongLongInt(v) => {
-                        mprops.headers.insert(key, Json::I64(v));
-                    },
-                    TableEntry::LongLongUint(v) => {
-                        mprops.headers.insert(key, Json::U64(v));
-                    },
-                    TableEntry::Float(v) => {
-                        mprops.headers.insert(key, Json::F64(v as f64));
-                    },
-                    TableEntry::Double(v) => {
-                        mprops.headers.insert(key, Json::F64(v));
-                    },
-                    TableEntry::LongString(v) => {
-                        mprops.headers.insert(key, Json::String(v));
-                    },
-                    TableEntry::Void => {
-                        mprops.headers.insert(key, Json::Null);
-                    },
-                    _ => (),
-                    // ShortString(String),
-                    // TableEntry::FieldTable(Table) =>
-                    // TableEntry::Timestamp(u64) =>
-                    // TableEntry::FieldArray(Vec<TableEntry>) =>
-                    // TableEntry::DecimalValue(u8, u32) => mprops.headers.insert(key, v),
-                };
+                let val = try!(entry_to_json(entry));
+                mprops.headers.insert(key, val);
             }
         }
 
         // the body
-        let data = figure_out_body(content_type, body);
+        let data = try!(figure_out_body(content_type, body));
 
         // and put it together
         let msg = Msg {
@@ -114,7 +70,7 @@ pub fn build_output(info:bool, deliver:&Deliver, props:&BasicProperties, body:Ve
         let js = json::as_pretty_json(&msg);
 
         // convert to bytes
-        js.to_string().as_bytes().to_owned()
+        Ok(js.to_string().as_bytes().to_owned())
 
     } else {
 
@@ -122,47 +78,61 @@ pub fn build_output(info:bool, deliver:&Deliver, props:&BasicProperties, body:Ve
 
         match content_type.as_ref() {
             "application/json" => {
-                // interpret body
-                let body = figure_out_body(content_type, body);
+                // interpret body so we can pretty print it
+                let body = try!(figure_out_body(content_type, body));
 
-                // encode
+                // encode back as pretty
                 let js = json::as_pretty_json(&body);
 
                 // convert to bytes
-                js.to_string().as_bytes().to_owned()
+                Ok(js.to_string().as_bytes().to_owned())
             },
-            _ => body
+
+            // just return untranslated bytes
+            _ => Ok(body)
         }
 
     }
 }
 
 
-fn figure_out_body(content_type:String, body:Vec<u8>) -> Json {
-
-    // interpret body as a binary and base64 encode
-    fn as_base64(body:Vec<u8>) -> Json {
-        Json::String(body.to_base64(base64::STANDARD))
-    }
-
-    fn read_str(body:Vec<u8>) -> String {
-        String::from_utf8(body).unwrap_or_else(|e| exitln!("Error: {:?}", e))
-    }
+fn figure_out_body(content_type:String, body:Vec<u8>) -> Result<Json,RbtError> {
 
     // depending on content type, do something
     match content_type.as_ref() {
-        "application/json" => {
-            Json::from_str(&read_str(body)).unwrap_or_else(|e| exitln!("Error: {:?}", e))
-        },
-        _ => match content_type.find("text/") {
-            Some(idx) => match idx == 0 {
-                true => {
-                    Json::String(read_str(body))
-                },
-                false => as_base64(body)
-            },
-            _ => as_base64(body)
+        "application/json" => Ok(try!(Json::from_str(&try!(String::from_utf8(body))))),
+        _ => {
+            if let Some(_) = content_type.find("text/") {
+                return Ok(Json::String(try!(String::from_utf8(body))));
+            } else {
+                Ok(Json::String(body.to_base64(base64::STANDARD)))
+            }
         }
     }
 
+}
+
+
+fn entry_to_json(entry:TableEntry) -> Result<Json,String> {
+    match entry {
+        TableEntry::Bool(v)           => Ok(Json::Boolean(v)),
+        TableEntry::ShortShortInt(v)  => Ok(Json::I64(v as i64)),
+        TableEntry::ShortShortUint(v) => Ok(Json::U64(v as u64)),
+        TableEntry::ShortInt(v)       => Ok(Json::I64(v as i64)),
+        TableEntry::ShortUint(v)      => Ok(Json::U64(v as u64)),
+        TableEntry::LongInt(v)        => Ok(Json::I64(v as i64)),
+        TableEntry::LongUint(v)       => Ok(Json::U64(v as u64)),
+        TableEntry::LongLongInt(v)    => Ok(Json::I64(v)),
+        TableEntry::LongLongUint(v)   => Ok(Json::U64(v)),
+        TableEntry::Float(v)          => Ok(Json::F64(v as f64)),
+        TableEntry::Double(v)         => Ok(Json::F64(v)),
+        TableEntry::LongString(v)     => Ok(Json::String(v)),
+        TableEntry::Void              => Ok(Json::Null),
+        _                             => Err(format!("Cant translate {:?}", entry)),
+        // ShortString(String),
+        // TableEntry::FieldTable(Table) =>
+        // TableEntry::Timestamp(u64) =>
+        // TableEntry::FieldArray(Vec<TableEntry>) =>
+        // TableEntry::DecimalValue(u8, u32) => mprops.headers.insert(key, v),
+    }
 }

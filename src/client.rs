@@ -1,6 +1,6 @@
-use std::process;
-use std::io::{self, Write};
+use std::io;
 
+use error::RbtError;
 use amqp::{self, Session, Options, Channel};
 use amqp::protocol::basic::{Deliver, BasicProperties};
 use amqp::Basic;
@@ -17,17 +17,17 @@ pub struct Sendable {
     pub reader: Box<io::Read>,
 }
 
-pub fn open_send(o:Options, s:Sendable) {
-    let (mut session, mut channel) = _open(o);
-    let mut headers = s.headers.iter().fold(Table::new(), |mut h, st| {
-        let idx = st.find(':').expect("Header must have a :");
+pub fn open_send(o:Options, s:Sendable) -> Result<(),RbtError> {
+    let (mut session, mut channel) = try!(_open(o));
+    let mut headers = Table::new();
+    for st in s.headers {
+        let idx = try!(st.find(':').ok_or("Header must have a :"));
         let (name, value) = st.split_at(idx);
         let key = name.trim();
         let valstr = (&value[1..]).trim();
         let val = narrow(valstr);
-        h.insert(String::from(key), val);
-        h
-    });
+        headers.insert(String::from(key), val);
+    }
     if s.file_name != "-" && !headers.contains_key("fileName") {
         headers.insert("fileName".to_owned(), TableEntry::LongString(String::from(s.file_name)));
     }
@@ -38,13 +38,11 @@ pub fn open_send(o:Options, s:Sendable) {
     };
     let mut buffer = Box::new(vec![]);
     let mut reader = s.reader;
-    reader.read_to_end(&mut buffer)
-        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
-    channel.basic_publish(s.exchange, s.routing_key, false, false, props, *buffer)
-        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
-    channel.close(200, "Bye")
-        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
+    try!(reader.read_to_end(&mut buffer));
+    try!(channel.basic_publish(s.exchange, s.routing_key, false, false, props, *buffer));
+    try!(channel.close(200, "Bye"));
     session.close(200, "Good Bye");
+    Ok(())
 }
 
 
@@ -65,24 +63,18 @@ fn narrow(str:&str) -> TableEntry {
 }
 
 
-fn _open(o:Options) -> (Session, Channel) {
-    let mut session = Session::new(o)
-        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
-    let channel = session.open_channel(1)
-        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
-    (session, channel)
+fn _open(o:Options) -> Result<(Session, Channel),RbtError> {
+    let mut session = try!(Session::new(o));
+    let channel = try!(session.open_channel(1));
+    Ok((session, channel))
 }
 
 
 
-pub type ReceiverCallback = fn(deliver:Deliver,
-                               props:BasicProperties,
-                               body:Vec<u8>);
-
 pub struct Receiver {
     pub exchange:String,
     pub routing_key:String,
-    pub callback:Box<FnMut(Deliver, BasicProperties, Vec<u8>) + Send>,
+    pub callback:Box<FnMut(Deliver, BasicProperties, Vec<u8>) -> Result<(), RbtError> + Send>,
 }
 
 impl amqp::Consumer for Receiver {
@@ -92,7 +84,10 @@ impl amqp::Consumer for Receiver {
         let delivery_tag = deliver.delivery_tag.clone();
 
         // and deliver to callback
-        (self.callback)(deliver, headers, body);
+        ((self.callback)(deliver, headers, body)).unwrap_or_else(|err| {
+            errln!("Error: {:?}", err);
+            ::std::process::exit(1);
+        });
 
         // ack it. not that we're in ack mode...
         channel.basic_ack(delivery_tag, false).unwrap();
@@ -100,37 +95,35 @@ impl amqp::Consumer for Receiver {
     }
 }
 
-pub fn open_receive(o:Options, r:Receiver) {
+pub fn open_receive(o:Options, r:Receiver) -> Result<(),RbtError> {
 
     // open session/channel
-    let (_, mut channel) = _open(o);
+    let (_, mut channel) = try!(_open(o));
 
     // declare an exclusive anonymous queue that auto deletes
     // when the process exits.
     // queue, passive, durable, exclusive, auto_delete, nowait,  arguments
     let queue_declare =
-        channel.queue_declare("", false, false, true,
-                              true, false, Table::new())
-        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
+        try!(channel.queue_declare("", false, false, true, true, false, Table::new()));
 
     // name is auto generated
     let queue_name = queue_declare.queue;
 
     // bind queue to the exchange, which already must
     // be declared.
-    channel.queue_bind(queue_name.clone(), r.exchange.clone(), r.routing_key.clone(),
-                       false, Table::new())
-        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
+    try!(channel.queue_bind(queue_name.clone(), r.exchange.clone(), r.routing_key.clone(),
+                            false, Table::new()));
 
     // why oh why?
     let consumer_tag = String::from("");
 
     // start consuming the queue.
-    channel.basic_consume(r, queue_name, consumer_tag, false,
-                          false, false, false, Table::new())
-        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
+    try!(channel.basic_consume(r, queue_name, consumer_tag, false,
+                               false, false, false, Table::new()));
 
     // and go!
     channel.start_consuming();
 
+
+    Ok(())
 }

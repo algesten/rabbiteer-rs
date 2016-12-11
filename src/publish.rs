@@ -1,32 +1,30 @@
-use std::io::{self, Write};
-use std::process;
+use std::io;
 use amqp;
 use clap::ArgMatches;
 use std::fs;
 use std::path::Path;
 use mime;
 use client;
+use error::RbtError;
 
 
 // helper function to turn a filename
 // into a mime-type
-fn type_from_file(file:&String) -> String {
-    let t = mime::Types::new()
-        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
+fn type_from_file(file:&String) -> Result<String,RbtError> {
+    let t = try!(mime::Types::new().or(Err("Failed to read mime types")));
     let path = Path::new(&file);
     let mime = t.mime_for_path(&path);
-    String::from(mime)
+    Ok(mime.to_owned())
 }
 
 
-pub fn do_publish(opts:amqp::Options, matches:&ArgMatches) {
+pub fn do_publish(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtError> {
 
     // either stdin or a file
-    let file = value_t_or_exit!(matches.value_of("file"), String);
+    let file = try!(value_t!(matches, "file", String));
     let reader: Box<io::Read> = match file.as_ref() {
         "-" => Box::new(io::stdin()),
-        _   => Box::new(fs::File::open(&file)
-                        .unwrap_or_else(|e| exitln!("Error: {}", e))),
+        _   => Box::new(try!(fs::File::open(&file))),
     };
 
     // either - or the name of the file
@@ -44,22 +42,21 @@ pub fn do_publish(opts:amqp::Options, matches:&ArgMatches) {
     let content_type = {
         let c = matches.value_of("content_type").unwrap_or("-").to_string();
         match c.as_ref() {
-            "-" => type_from_file(&file),
+            "-" => try!(type_from_file(&file)),
             _   => c,
         }
     };
 
     // the sendable wraps up the parsed parts
     let sendable = client::Sendable {
-        exchange: value_t_or_exit!(matches.value_of("exchange"), String),
-        routing_key: value_t_or_exit!(matches.value_of("routing_key"), String),
+        exchange: try!(value_t!(matches, "exchange", String)),
+        routing_key: try!(value_t!(matches, "routing_key", String)),
         content_type: content_type,
-        headers: values_t!(matches.values_of("header"), String).unwrap_or(vec![]),
+        headers: values_t!(matches, "header", String).unwrap_or(vec![]),
         file_name: file_name.to_owned(),
         reader: reader,
     };
 
     // ship it
-    client::open_send(opts, sendable);
-
+    client::open_send(opts, sendable)
 }

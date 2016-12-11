@@ -5,23 +5,31 @@ extern crate conduit_mime_types as mime;
 extern crate url;
 #[macro_use] extern crate clap;
 
-use std::io::Write;
-use std::process;
-use std::env;
-use std::fs;
-use clap::{Arg, App, SubCommand};
-use url::Url;
-use rustc_serialize::json::Json;
-
+mod error;
 #[macro_use] mod macros;
 mod client;
 mod output;
 mod publish;
 mod subscribe;
 
+use std::env;
+use std::fs;
+use clap::{Arg, App, SubCommand};
+use url::Url;
+use rustc_serialize::json::Json;
+use error::RbtError;
 
 
 fn main() {
+
+    _main().unwrap_or_else(|err| {
+        errln!("Error: {:?}", err);
+        ::std::process::exit(1);
+    });
+
+}
+
+fn _main() -> Result<(),RbtError> {
 
     let matches = App::new("Rabbiteer")
         .version(crate_version!())
@@ -125,24 +133,24 @@ fn main() {
 
     // global opts, before "publish or "subscribe"
     let mut opts = amqp::Options {
-        host:     value_t_or_exit!(matches.value_of("host"), String),
-        port:     value_t_or_exit!(matches.value_of("port"), u16),
-        login:    value_t_or_exit!(matches.value_of("user"), String),
-        password: value_t_or_exit!(matches.value_of("password"), String),
-        vhost:    value_t_or_exit!(matches.value_of("vhost"), String),
+        host:     try!(value_t!(matches, "host", String)),
+        port:     try!(value_t!(matches, "port", u16)),
+        login:    try!(value_t!(matches, "user", String)),
+        password: try!(value_t!(matches, "password", String)),
+        vhost:    try!(value_t!(matches, "vhost", String)),
         ..Default::default()
     };
 
     // url overrides the defaults
-    if let Ok(urlstr) = value_t!(matches.value_of("url"), String) {
-        parse_url(&mut opts, urlstr);
+    if let Ok(urlstr) = value_t!(matches, "url", String) {
+        try!(parse_url(&mut opts, urlstr));
     } else {
         // we use the CONF env first, and if
         // that doesn't work out, we fall back on
         // RABBITEER_URL
         if !parse_conf(&mut opts) {
             if let Ok(urlstr) = env::var("RABBITEER_URL") {
-                parse_url(&mut opts, urlstr);
+                try!(parse_url(&mut opts, urlstr));
             }
         }
     }
@@ -159,7 +167,7 @@ fn main() {
             // the args after the "publish command
             let subm = matches.subcommand_matches("publish").unwrap();
 
-            publish::do_publish(opts, subm);
+            publish::do_publish(opts, subm)
 
         },
 
@@ -169,22 +177,22 @@ fn main() {
             // the args after the "subscribe" command
             let subm = matches.subcommand_matches("subscribe").unwrap();
 
-            subscribe::do_subscribe(opts, subm);
+            subscribe::do_subscribe(opts, subm)
 
         },
 
-        _ => exitln!("Error: Need subcommand. Try --help"),
-    };
+        _ => rbterr!("Error: Need subcommand. Try --help"),
+    }
 
 }
 
 
 
 // update the opts object with the given url
-fn parse_url(opts:&mut amqp::Options, urlstr:String) {
+fn parse_url(opts:&mut amqp::Options, urlstr:String) -> Result<(),RbtError> {
     if let Ok(url) = Url::parse(urlstr.as_ref()) {
         if url.scheme() != "amqp" {
-            exitln!("Unknown scheme: {}", url);
+            rbterr!("Unknown scheme: {}", url);
         }
         if let Some(host) = url.host_str() {
             opts.host = host.to_owned();
@@ -203,8 +211,9 @@ fn parse_url(opts:&mut amqp::Options, urlstr:String) {
                 opts.vhost = vhost.to_owned();
             }
         }
+        Ok(())
     } else {
-        exitln!("Unable to parse url: {}", urlstr);
+        rbterr!("Unable to parse url: {}", urlstr);
     }
 }
 

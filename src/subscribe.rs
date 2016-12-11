@@ -1,5 +1,4 @@
 use std::io::{self, Write};
-use std::process;
 use rand::{thread_rng, Rng};
 use amqp::protocol::basic::{Deliver, BasicProperties};
 use amqp::{self, Table, TableEntry};
@@ -9,32 +8,30 @@ use std::path::Path;
 use mime;
 use client;
 use output;
+use error::RbtError;
 
 
+pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtError> {
 
-pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) {
-
-    let output = value_t_or_exit!(matches.value_of("output"), String);
+    let output = try!(value_t!(matches, "output", String));
     let info = matches.is_present("info");
 
     // type lookup map
-    let types = mime::Types::new()
-        .unwrap_or_else(|e| exitln!("Error: {:?}", e));
+    let types = try!(mime::Types::new().or(Err("Failed to read mime types")));
 
     // check output is a dir
     {
         if output != "-" {
-            let meta = fs::metadata(&output)
-                .unwrap_or_else(|e| exitln!("Error: {:?}", e));
+            let meta = try!(fs::metadata(&output));
             if !meta.is_dir() {
-                exitln!("Output {} is not a directory", output);
+                rbterr!("Output {} is not a directory", output);
             }
         }
     }
 
-    let receive = move |deliver:Deliver, props:BasicProperties, body:Vec<u8>| {
+    let receive = move |deliver:Deliver, props:BasicProperties, body:Vec<u8>| -> Result<(),RbtError> {
 
-        let msg = output::build_output(info, &deliver, &props, body);
+        let msg = try!(output::build_output(info, &deliver, &props, body));
 
         match output.as_ref() {
             "-" => {
@@ -45,12 +42,9 @@ pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) {
                 // lock until end of scope
                 let mut handle = stdout.lock();
 
-                handle.write(&msg)
-                    .unwrap_or_else(|e| exitln!("Error: {:?}", e));
-                handle.write(b"\n")
-                    .unwrap_or_else(|e| exitln!("Error: {:?}", e));
-                handle.flush()
-                    .unwrap_or_else(|e| exitln!("Error: {:?}", e));
+                try!(handle.write(&msg));
+                try!(handle.write(b"\n"));
+                try!(handle.flush());
 
             },
             _   => {
@@ -64,25 +58,26 @@ pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) {
 
                 // don't allow writes outside this dir
                 if outdir != path.parent().unwrap() {
-                    exitln!("Error: fileName writes outside -o dir: {}", path.to_str().unwrap());
+                    rbterr!("Output {} is not a directory", output);
                 }
 
-                let mut f = fs::File::create(path).expect("Unable to create file");
-                f.write_all(&msg).expect("Unable to write data");
+                let mut f = try!(fs::File::create(path));
+                try!(f.write_all(&msg));
 
             },
         }
 
+        Ok(())
+
     };
 
     let receiver = client::Receiver {
-        exchange: value_t_or_exit!(matches.value_of("exchange"), String),
-        routing_key: value_t_or_exit!(matches.value_of("routing_key"), String),
+        exchange: try!(value_t!(matches, "exchange", String)),
+        routing_key: try!(value_t!(matches, "routing_key", String)),
         callback: Box::new(receive),
     };
 
-    client::open_receive(opts, receiver);
-
+    client::open_receive(opts, receiver)
 }
 
 fn file_name_of(props:&BasicProperties, types:&mime::Types) -> String {
@@ -91,32 +86,26 @@ fn file_name_of(props:&BasicProperties, types:&mime::Types) -> String {
         props.content_type.clone().unwrap_or("application/octet-stream".to_owned());
 
     // figure out a good extension for this content type
-    let ext = match types.get_extension(&content_type) {
-        None => "bin".to_owned(),
-        Some(x) => {
-            // we can get more than one filename extension for
-            // a type, e.g. .jpg, .jpeg
-            match x.len() {
-                0 => "bin".to_owned(),
-                _ => {
-                    x[0].clone() // pick the first one
-                }
+    let ext = {
+        // we can get more than one filename extension for
+        // a type, e.g. .jpg, .jpeg
+        if let Some(x) = types.get_extension(&content_type) {
+            if x.len() > 0 {
+                return x[0].clone() // pick the first one
             }
-        },
+        }
+        "bin".to_owned()
     };
 
     // prefer a fileName from headers, but fall back on
     // a random name.
     let headers = props.headers.clone().unwrap_or(Table::new());
-    if headers.contains_key("fileName") {
-        match headers.get("fileName").unwrap() {
-            &TableEntry::LongString(ref f) => f.clone(),
-            _ => gen_rand_name(ext),
+    if let Some(entry) = headers.get("fileName") {
+        if let TableEntry::LongString(ref f) = *entry {
+            return f.clone();
         }
-    } else {
-        gen_rand_name(ext)
     }
-
+    gen_rand_name(ext)
 }
 
 fn gen_rand_name(ext:String) -> String {
