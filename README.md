@@ -28,10 +28,43 @@ The command has two "modes", `publish` and `subscribe`.
     OPTIONS:
         -h, --host <host>            RabbitMQ host [default: 127.0.0.1]
         -p, --password <password>    Password to authenticate with [default: guest]
-            --port <port>            Port to connect to [default: 5672]
-        -u, --user <user>            Username to authenticate with [default: guest]
-        -v, --vhost <vhost>          Virtual host [default: guest]
+        -P, --port <port>            Port to connect to [default: 5672]
+        -U, --url <url>              AMQP connection url (amqp://user:pass@host:port/vhost)
+        -u, --user <user>            User to authenticate with [default: guest]
+        -v, --vhost <vhost>          Virtual host [default: ]
 
+### Environment variables
+
+#### RABBITEER_URL
+
+The connection string can be set using the `RABBITEER_URL` environment
+variable.
+
+```
+$ export RABBITEER_URL="amqp://joe:secret@myspecialhost/somevhost"
+$ rabbiteer subscribe -e ttninjs-batch
+```
+
+#### CONF file
+
+The connection can be specified in a JSON file pointed out by `CONF`
+environment variable.
+
+```
+$ cat conf-localhost.json
+{
+    "amqp": {
+        "connection": {
+            "host": "localhost",
+            "vhost": "docker",
+            "login": "admin",
+            "password": "admin"
+        }
+    }
+}
+$ export CONF=conf-localhost.json
+$ rabbiteer subscribe -e ttninjs-batch
+```
 
 ## Publish
 

@@ -7,8 +7,11 @@ extern crate url;
 
 use std::io::Write;
 use std::process;
+use std::env;
+use std::fs;
 use clap::{Arg, App, SubCommand};
 use url::Url;
+use rustc_serialize::json::Json;
 
 mod client;
 mod output;
@@ -140,26 +143,14 @@ fn main() {
 
     // url overrides the defaults
     if let Ok(urlstr) = value_t!(matches.value_of("url"), String) {
-        if let Ok(url) = Url::parse(urlstr.as_ref()) {
-            if url.scheme() != "amqp" {
-                exitln!("Unknown scheme: {}", url);
-            }
-            if let Some(host) = url.host_str() {
-                opts.host = host.to_owned();
-            }
-            if let Some(port) = url.port() {
-                opts.port = port;
-            }
-            if url.username() != "" {
-                opts.login = url.username().to_owned();
-            }
-            if let Some(password) = url.password() {
-                opts.password = password.to_owned();
-            }
-            if let Some(mut segs) = url.path_segments() {
-                if let Some(vhost) = segs.nth(0) {
-                    opts.vhost = vhost.to_owned();
-                }
+        parse_url(&mut opts, urlstr);
+    } else {
+        // we use the CONF env first, and if
+        // that doesn't work out, we fall back on
+        // RABBITEER_URL
+        if !parse_conf(&mut opts) {
+            if let Ok(urlstr) = env::var("RABBITEER_URL") {
+                parse_url(&mut opts, urlstr);
             }
         }
     }
@@ -190,4 +181,74 @@ fn main() {
         _ => exitln!("Error: Need subcommand. Try --help"),
     };
 
+}
+
+
+
+// update the opts object with the given url
+fn parse_url(opts:&mut amqp::Options, urlstr:String) {
+    if let Ok(url) = Url::parse(urlstr.as_ref()) {
+        if url.scheme() != "amqp" {
+            exitln!("Unknown scheme: {}", url);
+        }
+        if let Some(host) = url.host_str() {
+            opts.host = host.to_owned();
+        }
+        if let Some(port) = url.port() {
+            opts.port = port;
+        }
+        if url.username() != "" {
+            opts.login = url.username().to_owned();
+        }
+        if let Some(password) = url.password() {
+            opts.password = password.to_owned();
+        }
+        if let Some(mut segs) = url.path_segments() {
+            if let Some(vhost) = segs.nth(0) {
+                opts.vhost = vhost.to_owned();
+            }
+        }
+    } else {
+        exitln!("Unable to parse url: {}", urlstr);
+    }
+}
+
+
+
+// update the opts object with the conf
+fn parse_conf(opts:&mut amqp::Options) -> bool {
+
+    let mut update = |connopt:Option<&Json>| -> bool {
+        if let Some(conn) = connopt {
+            if conn.is_object() {
+                if let Json::String(ref v) = conn["host"] {
+                    opts.host = v.to_owned();
+                }
+                if let Json::String(ref v) = conn["vhost"] {
+                    opts.vhost = v.to_owned();
+                }
+                if let Json::String(ref v) = conn["login"] {
+                    opts.login = v.to_owned();
+                }
+                if let Json::String(ref v) = conn["password"] {
+                    opts.password = v.to_owned();
+                }
+                return true;
+            }
+        }
+        false
+    };
+
+    if let Ok(file) = env::var("CONF") {
+        if let Ok(mut reader) = fs::File::open(&file) {
+            if let Ok(conf) = Json::from_reader(&mut reader) {
+                let first = &["amqp", "connection"];
+                let second = &["amqp"];
+                if update(conf.find_path(first)) || update(conf.find_path(second)) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
