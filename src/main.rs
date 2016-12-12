@@ -127,24 +127,24 @@ fn _main() -> Result<(),RbtError> {
 
     // global opts, before "publish or "subscribe"
     let mut opts = amqp::Options {
-        host:     try!(value_t!(matches, "host", String)),
-        port:     try!(value_t!(matches, "port", u16)),
-        login:    try!(value_t!(matches, "user", String)),
-        password: try!(value_t!(matches, "password", String)),
-        vhost:    try!(value_t!(matches, "vhost", String)),
+        host:     value_t!(matches, "host", String)?,
+        port:     value_t!(matches, "port", u16)?,
+        login:    value_t!(matches, "user", String)?,
+        password: value_t!(matches, "password", String)?,
+        vhost:    value_t!(matches, "vhost", String)?,
         ..Default::default()
     };
 
     // url overrides the defaults
     if let Ok(urlstr) = value_t!(matches, "url", String) {
-        try!(parse_url(&mut opts, urlstr));
+        parse_url(&mut opts, urlstr)?;
     } else {
         // we use the CONF env first, and if
         // that doesn't work out, we fall back on
         // AMQP_URL
         if !parse_conf(&mut opts) {
             if let Ok(urlstr) = env::var("AMQP_URL") {
-                try!(parse_url(&mut opts, urlstr));
+                parse_url(&mut opts, urlstr)?;
             }
         }
     }

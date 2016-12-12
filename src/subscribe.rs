@@ -13,16 +13,16 @@ use error::RbtError;
 
 pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtError> {
 
-    let output = try!(value_t!(matches, "output", String));
+    let output = value_t!(matches, "output", String)?;
     let info = matches.is_present("info");
 
     // type lookup map
-    let types = try!(mime::Types::new().or(Err("Failed to read mime types")));
+    let types = mime::Types::new().or(Err("Failed to read mime types"))?;
 
     // check output is a dir
     {
         if output != "-" {
-            let meta = try!(fs::metadata(&output));
+            let meta = fs::metadata(&output)?;
             if !meta.is_dir() {
                 rbterr!("Output {} is not a directory", output);
             }
@@ -31,7 +31,7 @@ pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtErr
 
     let receive = move |deliver:Deliver, props:BasicProperties, body:Vec<u8>| -> Result<(),RbtError> {
 
-        let msg = try!(output::build_output(info, &deliver, &props, body));
+        let msg = output::build_output(info, &deliver, &props, body)?;
 
         match output.as_ref() {
             "-" => {
@@ -42,9 +42,9 @@ pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtErr
                 // lock until end of scope
                 let mut handle = stdout.lock();
 
-                try!(handle.write(&msg));
-                try!(handle.write(b"\n"));
-                try!(handle.flush());
+                handle.write(&msg)?;
+                handle.write(b"\n")?;
+                handle.flush()?;
 
             },
             _   => {
@@ -63,8 +63,8 @@ pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtErr
 
                 errln!("{}", path.to_str().unwrap());
 
-                let mut f = try!(fs::File::create(path));
-                try!(f.write_all(&msg));
+                let mut f = fs::File::create(path)?;
+                f.write_all(&msg)?;
 
             },
         }
@@ -74,8 +74,8 @@ pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtErr
     };
 
     let receiver = client::Receiver {
-        exchange: try!(value_t!(matches, "exchange", String)),
-        routing_key: try!(value_t!(matches, "routing_key", String)),
+        exchange: value_t!(matches, "exchange", String)?,
+        routing_key: value_t!(matches, "routing_key", String)?,
         callback: Box::new(receive),
     };
 

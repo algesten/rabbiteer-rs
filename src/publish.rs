@@ -11,7 +11,7 @@ use error::RbtError;
 // helper function to turn a filename
 // into a mime-type
 fn type_from_file(file:&String) -> Result<String,RbtError> {
-    let t = try!(mime::Types::new().or(Err("Failed to read mime types")));
+    let t = mime::Types::new().or(Err("Failed to read mime types"))?;
     let path = Path::new(&file);
     let mime = t.mime_for_path(&path);
     Ok(mime.to_owned())
@@ -21,10 +21,10 @@ fn type_from_file(file:&String) -> Result<String,RbtError> {
 pub fn do_publish(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtError> {
 
     // either stdin or a file
-    let file = try!(value_t!(matches, "file", String));
+    let file = value_t!(matches, "file", String)?;
     let reader: Box<io::Read> = match file.as_ref() {
         "-" => Box::new(io::stdin()),
-        _   => Box::new(try!(fs::File::open(&file))),
+        _   => Box::new(fs::File::open(&file)?),
     };
 
     // either - or the name of the file
@@ -42,19 +42,19 @@ pub fn do_publish(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtError
     let content_type = {
         let c = matches.value_of("content_type").unwrap_or("-").to_string();
         match c.as_ref() {
-            "-" => try!(type_from_file(&file)),
+            "-" => type_from_file(&file)?,
             _   => c,
         }
     };
 
     // the sendable wraps up the parsed parts
     let sendable = client::Sendable {
-        exchange: try!(value_t!(matches, "exchange", String)),
-        routing_key: try!(value_t!(matches, "routing_key", String)),
+        exchange:     value_t!(matches, "exchange", String)?,
+        routing_key:  value_t!(matches, "routing_key", String)?,
         content_type: content_type,
-        headers: values_t!(matches, "header", String).unwrap_or(vec![]),
-        file_name: file_name.to_owned(),
-        reader: reader,
+        headers:      values_t!(matches, "header", String).unwrap_or(vec![]),
+        file_name:    file_name.to_owned(),
+        reader:       reader,
     };
 
     // ship it

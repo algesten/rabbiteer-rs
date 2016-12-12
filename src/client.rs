@@ -18,10 +18,10 @@ pub struct Sendable {
 }
 
 pub fn open_send(o:Options, s:Sendable) -> Result<(),RbtError> {
-    let (mut session, mut channel) = try!(_open(o));
+    let (mut session, mut channel) = _open(o)?;
     let mut headers = Table::new();
     for st in s.headers {
-        let idx = try!(st.find(':').ok_or("Header must have a :"));
+        let idx = st.find(':').ok_or("Header must have a :")?;
         let (name, value) = st.split_at(idx);
         let key = name.trim();
         let valstr = (&value[1..]).trim();
@@ -38,9 +38,9 @@ pub fn open_send(o:Options, s:Sendable) -> Result<(),RbtError> {
     };
     let mut buffer = Box::new(vec![]);
     let mut reader = s.reader;
-    try!(reader.read_to_end(&mut buffer));
-    try!(channel.basic_publish(s.exchange, s.routing_key, false, false, props, *buffer));
-    try!(channel.close(200, "Bye"));
+    reader.read_to_end(&mut buffer)?;
+    channel.basic_publish(s.exchange, s.routing_key, false, false, props, *buffer)?;
+    channel.close(200, "Bye")?;
     session.close(200, "Good Bye");
     Ok(())
 }
@@ -66,8 +66,8 @@ fn narrow(str:&str) -> TableEntry {
 fn _open(o:Options) -> Result<(Session, Channel),RbtError> {
     errln!("Connecting to amqp://{}:{}@{}:{}/{}",
            o.login, o.password, o.host, o.port, o.vhost);
-    let mut session = try!(Session::new(o));
-    let channel = try!(session.open_channel(1));
+    let mut session = Session::new(o)?;
+    let channel = session.open_channel(1)?;
     Ok((session, channel))
 }
 
@@ -97,28 +97,28 @@ impl amqp::Consumer for Receiver {
 pub fn open_receive(o:Options, r:Receiver) -> Result<(),RbtError> {
 
     // open session/channel
-    let (_, mut channel) = try!(_open(o));
+    let (_, mut channel) = _open(o)?;
 
     // declare an exclusive anonymous queue that auto deletes
     // when the process exits.
     // queue, passive, durable, exclusive, auto_delete, nowait,  arguments
     let queue_declare =
-        try!(channel.queue_declare("", false, false, true, true, false, Table::new()));
+        channel.queue_declare("", false, false, true, true, false, Table::new())?;
 
     // name is auto generated
     let queue_name = queue_declare.queue;
 
     // bind queue to the exchange, which already must
     // be declared.
-    try!(channel.queue_bind(queue_name.clone(), r.exchange.clone(), r.routing_key.clone(),
-                            false, Table::new()));
+    channel.queue_bind(queue_name.clone(), r.exchange.clone(), r.routing_key.clone(),
+                       false, Table::new())?;
 
     // why oh why?
     let consumer_tag = String::from("");
 
     // start consuming the queue.
-    try!(channel.basic_consume(r, queue_name, consumer_tag, false,
-                               false, false, false, Table::new()));
+    channel.basic_consume(r, queue_name, consumer_tag, false,
+                          false, false, false, Table::new())?;
 
     // and go!
     channel.start_consuming();

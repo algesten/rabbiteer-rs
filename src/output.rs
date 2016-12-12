@@ -51,13 +51,13 @@ pub fn build_output(info:bool, deliver:&Deliver,
         if let Some(table) = props.headers.clone() {
             for (skey, entry) in table {
                 let key = skey.to_owned();
-                let val = try!(entry_to_json(entry));
+                let val = entry_to_json(entry)?;
                 mprops.headers.insert(key, val);
             }
         }
 
         // the body
-        let data = try!(figure_out_body(content_type, body));
+        let data = figure_out_body(content_type, body)?;
 
         // and put it together
         let msg = Msg {
@@ -79,7 +79,7 @@ pub fn build_output(info:bool, deliver:&Deliver,
         match content_type.as_ref() {
             "application/json" => {
                 // interpret body so we can pretty print it
-                let body = try!(figure_out_body(content_type, body));
+                let body = figure_out_body(content_type, body)?;
 
                 // encode back as pretty
                 let js = json::as_pretty_json(&body);
@@ -100,10 +100,10 @@ fn figure_out_body(content_type:String, body:Vec<u8>) -> Result<Json,RbtError> {
 
     // depending on content type, do something
     match content_type.as_ref() {
-        "application/json" => Ok(try!(Json::from_str(&try!(String::from_utf8(body))))),
+        "application/json" => Ok(Json::from_str(&String::from_utf8(body)?)?),
         _ => {
             if let Some(_) = content_type.find("text/") {
-                return Ok(Json::String(try!(String::from_utf8(body))));
+                return Ok(Json::String(String::from_utf8(body)?));
             } else {
                 Ok(Json::String(body.to_base64(base64::STANDARD)))
             }
