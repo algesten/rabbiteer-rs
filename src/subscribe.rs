@@ -86,7 +86,7 @@ fn file_name_of(props:&BasicProperties, types:&mime::Types) -> String {
         props.content_type.clone().unwrap_or("application/octet-stream".to_owned());
 
     // figure out a good extension for this content type
-    let ext = {
+    let ext = (|| {
         // we can get more than one filename extension for
         // a type, e.g. .jpg, .jpeg
         if let Some(x) = types.get_extension(&content_type) {
@@ -95,7 +95,7 @@ fn file_name_of(props:&BasicProperties, types:&mime::Types) -> String {
             }
         }
         "bin".to_owned()
-    };
+    })();
 
     // prefer a fileName from headers, but fall back on
     // a random name.
