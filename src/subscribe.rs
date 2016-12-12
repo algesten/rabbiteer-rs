@@ -61,6 +61,8 @@ pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtErr
                     rbterr!("Output {} is not a directory", output);
                 }
 
+                errln!("{}", path.to_str().unwrap());
+
                 let mut f = try!(fs::File::create(path));
                 try!(f.write_all(&msg));
 
