@@ -9,10 +9,9 @@ Install Cargo (Rust).
 
     $ brew install rust
 
-Install rabbiteer (from git until
-https://github.com/Antti/rust-amqp/issues/46 is resolved).
+Install rabbiteer.
 
-    $ cargo install --git https://github.com/algesten/rabbiteer-rs rabbiteer
+    $ cargo install rabbiteer
 
 ## Command format
 

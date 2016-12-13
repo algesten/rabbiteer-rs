@@ -16,8 +16,8 @@ rustc-serialize = "0.3"
 url = "*"
 
 [dependencies.amqp]
-git = "https://github.com/algesten/rust-amqp"
-branch = "rabbiteer"
+#git = "https://github.com/algesten/rust-amqp"
+#branch = "rabbiteer"
 #path = "/Users/martin/dev/_dist/rust-amqp"
-#version = "0.0.19"
+version = "0.0.20"
 default-features = false
