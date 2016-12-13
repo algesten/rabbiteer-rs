@@ -10,10 +10,10 @@ readme = "README.md"
 
 [dependencies]
 clap = "2"
-rand = "*"
+rand = "0.3.15"
 conduit-mime-types = "0.7"
 rustc-serialize = "0.3"
-url = "*"
+url = "1.2.3"
 
 [dependencies.amqp]
 #git = "https://github.com/algesten/rust-amqp"
