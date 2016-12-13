@@ -101,13 +101,10 @@ fn figure_out_body(content_type:String, body:Vec<u8>) -> Result<Json,RbtError> {
     // depending on content type, do something
     match content_type.as_ref() {
         "application/json" => Ok(Json::from_str(&String::from_utf8(body)?)?),
-        _ => {
-            if let Some(_) = content_type.find("text/") {
-                return Ok(Json::String(String::from_utf8(body)?));
-            } else {
-                Ok(Json::String(body.to_base64(base64::STANDARD)))
-            }
-        }
+        _ => Ok(match content_type.find("text/") {
+            Some(_) => Json::String(String::from_utf8(body)?),
+            _ => Json::String(body.to_base64(base64::STANDARD))
+        })
     }
 
 }

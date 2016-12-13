@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 use rand::{thread_rng, Rng};
 use amqp::protocol::basic::{Deliver, BasicProperties};
-use amqp::{self, Table, TableEntry};
+use amqp::{self, TableEntry};
 use clap::ArgMatches;
 use std::fs;
 use std::path::Path;
@@ -88,26 +88,20 @@ fn file_name_of(props:&BasicProperties, types:&mime::Types) -> String {
         props.content_type.clone().unwrap_or("application/octet-stream".to_owned());
 
     // figure out a good extension for this content type
-    let ext = (|| {
-        // we can get more than one filename extension for
-        // a type, e.g. .jpg, .jpeg
-        if let Some(x) = types.get_extension(&content_type) {
-            if x.len() > 0 {
-                return x[0].clone() // pick the first one
-            }
-        }
-        "bin".to_owned()
-    })();
+    let ext = types.get_extension(&content_type)
+        .and_then(|x| Some(x[0].clone()))
+        .or_else(|| Some("bin".to_owned()))
+        .unwrap();
 
     // prefer a fileName from headers, but fall back on
     // a random name.
-    let headers = props.headers.clone().unwrap_or(Table::new());
-    if let Some(entry) = headers.get("fileName") {
-        if let TableEntry::LongString(ref f) = *entry {
-            return f.clone();
-        }
-    }
-    gen_rand_name(ext)
+    props.headers.clone()
+        .and_then(|x| match x.get("fileName") {
+            Some(&TableEntry::LongString(ref f)) => Some((*f).clone()),
+            _ => None
+        })
+        .or_else(|| Some(gen_rand_name(ext)))
+        .unwrap()
 }
 
 fn gen_rand_name(ext:String) -> String {
