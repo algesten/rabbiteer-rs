@@ -122,6 +122,10 @@ fn _main() -> Result<(),RbtError> {
                          .help("Include delivery info (and headers).")
                          .short("i")
                          .long("info"))
+                    .arg(Arg::with_name("single")
+                         .help("Expect one single message, then quit.")
+                         .short("1")
+                         .long("single"))
         )
         .get_matches();
 

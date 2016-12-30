@@ -15,6 +15,7 @@ pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtErr
 
     let output = value_t!(matches, "output", String)?;
     let info = matches.is_present("info");
+    let single = matches.is_present("single");
 
     // type lookup map
     let types = mime::Types::new().or(Err("Failed to read mime types"))?;
@@ -66,7 +67,13 @@ pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtErr
                 let mut f = fs::File::create(path)?;
                 f.write_all(&msg)?;
 
-            },
+            }
+
+        }
+
+        // maybe end here?
+        if single {
+            ::std::process::exit(0);
         }
 
         Ok(())
