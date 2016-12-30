@@ -14,7 +14,8 @@ use error::RbtError;
 pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtError> {
 
     let output = value_t!(matches, "output", String)?;
-    let info = matches.is_present("info");
+    let queue  = value_t!(matches, "queue", String)?;
+    let info   = matches.is_present("info");
     let single = matches.is_present("single");
 
     // type lookup map
@@ -86,7 +87,7 @@ pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtErr
         callback: Box::new(receive),
     };
 
-    client::open_receive(opts, receiver)
+    client::open_receive(opts, queue.as_ref(), receiver)
 }
 
 fn file_name_of(props:&BasicProperties, types:&mime::Types) -> String {

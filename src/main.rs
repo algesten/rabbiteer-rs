@@ -126,6 +126,11 @@ fn _main() -> Result<(),RbtError> {
                          .help("Expect one single message, then quit.")
                          .short("1")
                          .long("single"))
+                    .arg(Arg::with_name("queue")
+                         .help("Use a named (non-auto_delete) queue.")
+                         .short("q")
+                         .long("queue")
+                         .default_value("-"))
         )
         .get_matches();
 

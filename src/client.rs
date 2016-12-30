@@ -64,8 +64,8 @@ fn narrow(str:&str) -> TableEntry {
 
 
 fn _open(o:Options) -> Result<(Session, Channel),RbtError> {
-    errln!("Connecting to amqp://{}:{}@{}:{}/{}",
-           o.login, o.password, o.host, o.port, o.vhost);
+//    errln!("Connecting to amqp://{}:{}@{}:{}/{}",
+//           o.login, o.password, o.host, o.port, o.vhost);
     let mut session = Session::new(o)?;
     let channel = session.open_channel(1)?;
     Ok((session, channel))
@@ -94,35 +94,40 @@ impl amqp::Consumer for Receiver {
     }
 }
 
-pub fn open_receive(o:Options, r:Receiver) -> Result<(),RbtError> {
+pub fn open_receive(o:Options, q:&str, r:Receiver) -> Result<(),RbtError> {
 
     // open session/channel
     let (_, mut channel) = _open(o)?;
 
-    // declare an exclusive anonymous queue that auto deletes
-    // when the process exits.
-    // queue, passive, durable, exclusive, auto_delete, nowait,  arguments
+    // when queue_name is -, we declare an exclusive anonymous queue
+    // that auto deletes when the process exits.
+    let (queue_name, auto_delete) = match q {
+        "-" => ("", true),
+        _ => (q, false)
+    };
+    // queue, passive, durable, exclusive, auto_delete, nowait, arguments
     let queue_declare =
-        channel.queue_declare("", false, false, true, true, false, Table::new())?;
+        channel.queue_declare(queue_name, false, false,
+                              auto_delete, auto_delete, false, Table::new())?;
 
     // name is auto generated
-    let queue_name = queue_declare.queue;
+    let decl_queue_name = queue_declare.queue;
 
     // bind queue to the exchange, which already must
     // be declared.
-    channel.queue_bind(queue_name.clone(), r.exchange.clone(), r.routing_key.clone(),
+    channel.queue_bind(decl_queue_name.clone(), r.exchange.clone(), r.routing_key.clone(),
                        false, Table::new())?;
 
     // why oh why?
-    let consumer_tag = String::from("");
+    let consumer_tag = "".to_string();
 
     // start consuming the queue.
-    channel.basic_consume(r, queue_name, consumer_tag, false,
+    // callback, queue, consumer_tag, no_local, no_ack, exclusive, nowait, arguments
+    channel.basic_consume(r, decl_queue_name, consumer_tag, false,
                           false, false, false, Table::new())?;
 
     // and go!
     channel.start_consuming();
-
 
     Ok(())
 }
