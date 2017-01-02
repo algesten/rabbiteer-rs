@@ -85,11 +85,11 @@ impl amqp::Consumer for Receiver {
 
         let delivery_tag = deliver.delivery_tag.clone();
 
+        // ack it. make it go away.
+        channel.basic_ack(delivery_tag, false).unwrap();
+
         // and deliver to callback
         ((self.callback)(deliver, headers, body)).unwrap_or_else(::error::handle);
-
-        // ack it. not that we're in ack mode...
-        channel.basic_ack(delivery_tag, false).unwrap();
 
     }
 }
