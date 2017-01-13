@@ -1,12 +1,9 @@
 use std::io;
-
 use error::RbtError;
 use amqp::{self, Session, Options, Channel};
 use amqp::protocol::basic::{Deliver, BasicProperties};
 use amqp::Basic;
 use amqp::{Table, TableEntry};
-
-
 
 pub struct Sendable {
     pub exchange: String,
@@ -17,8 +14,21 @@ pub struct Sendable {
     pub reader: Box<io::Read>,
 }
 
-pub fn open_send(o:Options, s:Sendable) -> Result<(),RbtError> {
+pub type ReceiveCb = FnMut(Deliver, BasicProperties, Vec<u8>) -> Result<(), RbtError> + Send;
+
+pub struct Receiver {
+    pub exchange:String,
+    pub routing_key:String,
+    pub callback:Box<ReceiveCb>,
+}
+
+
+pub fn open_send(o:Options, s:Sendable, r:Option<Receiver>) -> Result<(),RbtError> {
+
+    // open the channel
     let (mut session, mut channel) = _open(o)?;
+
+    // table of headers, parsed from input
     let mut headers = Table::new();
     for st in s.headers {
         let idx = st.find(':').ok_or("Header must have a :")?;
@@ -28,20 +38,53 @@ pub fn open_send(o:Options, s:Sendable) -> Result<(),RbtError> {
         let val = narrow(valstr);
         headers.insert(String::from(key), val);
     }
+
+    // put filename in headers if we read from file
     if s.file_name != "-" && !headers.contains_key("fileName") {
         headers.insert("fileName".to_owned(), TableEntry::LongString(String::from(s.file_name)));
     }
-    let props = BasicProperties {
+
+    // send properties
+    let mut props = BasicProperties {
         content_type: Some(s.content_type),
         headers: Some(headers),
         ..Default::default()
     };
+
+    // if we are doing rpc, there is a receiver in this optional
+    let isrpc = match r {
+        Some(receiver) => {
+            // open a receiver and get the queue name
+            let queue_name = do_open_receive(&mut channel, "-", receiver)?;
+
+            // put queue name as our reply to
+            props.reply_to = Some(queue_name);
+
+            // and a fixed correltionId
+            props.correlation_id = Some("rabbiteer here".to_owned());
+
+            true
+        },
+        None => false
+    };
+
+    // read input input buffer
     let mut buffer = Box::new(vec![]);
     let mut reader = s.reader;
     reader.read_to_end(&mut buffer)?;
+
+    // publish it
     channel.basic_publish(s.exchange, s.routing_key, false, false, props, *buffer)?;
-    channel.close(200, "Bye")?;
-    session.close(200, "Good Bye");
+
+    if isrpc {
+        // this stalls and we receive reply in callback
+        channel.start_consuming();
+    } else {
+        // and unwind if not rpc
+        channel.close(200, "Bye")?;
+        session.close(200, "Good Bye");
+    }
+
     Ok(())
 }
 
@@ -71,14 +114,6 @@ fn _open(o:Options) -> Result<(Session, Channel),RbtError> {
     Ok((session, channel))
 }
 
-
-
-pub struct Receiver {
-    pub exchange:String,
-    pub routing_key:String,
-    pub callback:Box<FnMut(Deliver, BasicProperties, Vec<u8>) -> Result<(), RbtError> + Send>,
-}
-
 impl amqp::Consumer for Receiver {
     fn handle_delivery(&mut self, channel:&mut Channel, deliver:Deliver,
                        headers:BasicProperties, body:Vec<u8>){
@@ -99,6 +134,18 @@ pub fn open_receive(o:Options, q:&str, r:Receiver) -> Result<(),RbtError> {
     // open session/channel
     let (_, mut channel) = _open(o)?;
 
+    // and pass it to internal open_receive
+    do_open_receive(&mut channel, q, r)?;
+
+    // and go!
+    channel.start_consuming();
+
+    Ok(())
+}
+
+
+fn do_open_receive(channel:&mut Channel, q:&str, r:Receiver) -> Result<String,RbtError> {
+
     // when queue_name is -, we declare an exclusive anonymous queue
     // that auto deletes when the process exits.
     let (queue_name, auto_delete) = match q {
@@ -115,19 +162,18 @@ pub fn open_receive(o:Options, q:&str, r:Receiver) -> Result<(),RbtError> {
 
     // bind queue to the exchange, which already must
     // be declared.
-    channel.queue_bind(decl_queue_name.clone(), r.exchange.clone(), r.routing_key.clone(),
-                       false, Table::new())?;
+    if r.exchange != "" {
+        channel.queue_bind(decl_queue_name.clone(), r.exchange.clone(), r.routing_key.clone(),
+                           false, Table::new())?;
+    }
 
     // why oh why?
     let consumer_tag = "".to_string();
 
     // start consuming the queue.
     // callback, queue, consumer_tag, no_local, no_ack, exclusive, nowait, arguments
-    channel.basic_consume(r, decl_queue_name, consumer_tag, false,
+    channel.basic_consume(r, decl_queue_name.clone(), consumer_tag, false,
                           false, false, false, Table::new())?;
 
-    // and go!
-    channel.start_consuming();
-
-    Ok(())
+    Ok(decl_queue_name)
 }

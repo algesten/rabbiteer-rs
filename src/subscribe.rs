@@ -31,7 +31,8 @@ pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtErr
         }
     }
 
-    let receive = move |deliver:Deliver, props:BasicProperties, body:Vec<u8>| -> Result<(),RbtError> {
+    let receive = move |deliver:Deliver, props:BasicProperties, body:Vec<u8>| ->
+        Result<(),RbtError> {
 
         let msg = output::build_output(info, &deliver, &props, body)?;
 
