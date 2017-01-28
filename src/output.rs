@@ -49,7 +49,7 @@ pub fn build_output(info:bool, deliver:&Deliver,
         };
 
         if let Some(ref table) = props.headers {
-            mprops.headers = table_to_json(table)?;
+            mprops.headers = table_to_json(table);
         }
 
         // the body
@@ -107,42 +107,40 @@ fn figure_out_body(content_type:String, body:Vec<u8>) -> Result<Json,RbtError> {
 
 
 
-fn table_to_json(table:&Table) -> Result<Object,String> {
+fn table_to_json(table:&Table) -> Object {
     let mut ret = Object::new();
     for (skey, entry) in table {
-        let key = skey.clone().to_string();
-        let val = entry_to_json(&entry)?;
-        ret.insert(key, val);
+        ret.insert(skey.clone().to_string(), entry_to_json(&entry));
     }
-    Ok(ret)
+    ret
 }
 
-fn entry_to_json(entry:&TableEntry) -> Result<Json,String> {
+fn entry_to_json(entry:&TableEntry) -> Json {
     match *entry {
-        TableEntry::Bool(v)           => Ok(Json::Boolean(v)),
-        TableEntry::ShortShortInt(v)  => Ok(Json::I64(v as i64)),
-        TableEntry::ShortShortUint(v) => Ok(Json::U64(v as u64)),
-        TableEntry::ShortInt(v)       => Ok(Json::I64(v as i64)),
-        TableEntry::ShortUint(v)      => Ok(Json::U64(v as u64)),
-        TableEntry::LongInt(v)        => Ok(Json::I64(v as i64)),
-        TableEntry::LongUint(v)       => Ok(Json::U64(v as u64)),
-        TableEntry::LongLongInt(v)    => Ok(Json::I64(v)),
-        TableEntry::LongLongUint(v)   => Ok(Json::U64(v)),
-        TableEntry::Float(v)          => Ok(Json::F64(v as f64)),
-        TableEntry::Double(v)         => Ok(Json::F64(v)),
-        TableEntry::LongString(ref v) => Ok(Json::String(v.clone())),
-        TableEntry::Void              => Ok(Json::Null),
-        TableEntry::FieldTable(ref v) => Ok(Json::Object(table_to_json(&v)?)),
+        TableEntry::Bool(v)            => Json::Boolean(v),
+        TableEntry::ShortShortInt(v)   => Json::I64(v as i64),
+        TableEntry::ShortShortUint(v)  => Json::U64(v as u64),
+        TableEntry::ShortInt(v)        => Json::I64(v as i64),
+        TableEntry::ShortUint(v)       => Json::U64(v as u64),
+        TableEntry::LongInt(v)         => Json::I64(v as i64),
+        TableEntry::LongUint(v)        => Json::U64(v as u64),
+        TableEntry::LongLongInt(v)     => Json::I64(v),
+        TableEntry::LongLongUint(v)    => Json::U64(v),
+        TableEntry::Float(v)           => Json::F64(v as f64),
+        TableEntry::Double(v)          => Json::F64(v),
+        TableEntry::LongString(ref v)  => Json::String(v.clone()),
+        TableEntry::Void               => Json::Null,
+        TableEntry::FieldTable(ref v)  => Json::Object(table_to_json(&v)),
+        TableEntry::Timestamp(v)       => Json::U64(v as u64), // maybe string date?
         TableEntry::FieldArray(ref vs) => {
             let mut ret:Vec<Json> = Vec::new();
-            for v in vs { ret.push(entry_to_json(v)?) }
-            Ok(Json::Array(ret))
+            for v in vs { ret.push(entry_to_json(v)) }
+            Json::Array(ret)
         },
-        TableEntry::Timestamp(v)      => Ok(Json::U64(v as u64)), // maybe string date?
         TableEntry::DecimalValue(decimals, v) => {
             let ten:f64 = (10 as u64).pow(decimals as u32) as f64;
             let dec:f64 = (v as f64) / ten;
-            Ok(Json::F64(dec))
+            Json::F64(dec)
         },
         //_                             => Err(format!("Cant translate {:?}", entry)),
         // TableEntry::ShortString(ref v) => Ok(Json::String(v.clone())),
