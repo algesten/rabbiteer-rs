@@ -1,7 +1,7 @@
 use rustc_serialize::json::{self, Json, Object};
 use rustc_serialize::base64::{self, ToBase64};
 use amqp::protocol::basic::{Deliver, BasicProperties};
-use amqp::TableEntry;
+use amqp::{Table, TableEntry};
 use error::RbtError;
 
 
@@ -48,12 +48,8 @@ pub fn build_output(info:bool, deliver:&Deliver,
             headers: Object::new(),
         };
 
-        if let Some(table) = props.headers.clone() {
-            for (skey, entry) in table {
-                let key = skey.to_owned();
-                let val = entry_to_json(entry)?;
-                mprops.headers.insert(key, val);
-            }
+        if let Some(ref table) = props.headers {
+            mprops.headers = table_to_json(table)?;
         }
 
         // the body
@@ -110,8 +106,19 @@ fn figure_out_body(content_type:String, body:Vec<u8>) -> Result<Json,RbtError> {
 }
 
 
-fn entry_to_json(entry:TableEntry) -> Result<Json,String> {
-    match entry {
+
+fn table_to_json(table:&Table) -> Result<Object,String> {
+    let mut ret = Object::new();
+    for (skey, entry) in table {
+        let key = skey.clone().to_string();
+        let val = entry_to_json(&entry)?;
+        ret.insert(key, val);
+    }
+    Ok(ret)
+}
+
+fn entry_to_json(entry:&TableEntry) -> Result<Json,String> {
+    match *entry {
         TableEntry::Bool(v)           => Ok(Json::Boolean(v)),
         TableEntry::ShortShortInt(v)  => Ok(Json::I64(v as i64)),
         TableEntry::ShortShortUint(v) => Ok(Json::U64(v as u64)),
@@ -123,13 +130,21 @@ fn entry_to_json(entry:TableEntry) -> Result<Json,String> {
         TableEntry::LongLongUint(v)   => Ok(Json::U64(v)),
         TableEntry::Float(v)          => Ok(Json::F64(v as f64)),
         TableEntry::Double(v)         => Ok(Json::F64(v)),
-        TableEntry::LongString(v)     => Ok(Json::String(v)),
+        TableEntry::LongString(ref v) => Ok(Json::String(v.clone())),
         TableEntry::Void              => Ok(Json::Null),
-        _                             => Err(format!("Cant translate {:?}", entry)),
-        // ShortString(String),
-        // TableEntry::FieldTable(Table) =>
-        // TableEntry::Timestamp(u64) =>
-        // TableEntry::FieldArray(Vec<TableEntry>) =>
-        // TableEntry::DecimalValue(u8, u32) => mprops.headers.insert(key, v),
+        TableEntry::FieldTable(ref v) => Ok(Json::Object(table_to_json(&v)?)),
+        TableEntry::FieldArray(ref vs) => {
+            let mut ret:Vec<Json> = Vec::new();
+            for v in vs { ret.push(entry_to_json(v)?) }
+            Ok(Json::Array(ret))
+        },
+        TableEntry::Timestamp(v)      => Ok(Json::U64(v as u64)), // maybe string date?
+        TableEntry::DecimalValue(decimals, v) => {
+            let ten:f64 = (10 as u64).pow(decimals as u32) as f64;
+            let dec:f64 = (v as f64) / ten;
+            Ok(Json::F64(dec))
+        },
+        //_                             => Err(format!("Cant translate {:?}", entry)),
+        // TableEntry::ShortString(ref v) => Ok(Json::String(v.clone())),
     }
 }
