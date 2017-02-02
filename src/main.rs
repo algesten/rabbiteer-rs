@@ -23,6 +23,12 @@ fn main() {
     _main().unwrap_or_else(error::handle);
 }
 
+static HOST:&'static str = "127.0.0.1";
+static PORT:&'static str = "5672";
+static USER:&'static str = "guest";
+static PASS:&'static str = "guest";
+static VHST:&'static str = "";
+
 fn _main() -> Result<(),RbtError> {
 
     let matches = App::new("Rabbiteer")
@@ -34,32 +40,32 @@ fn _main() -> Result<(),RbtError> {
              .short("h")
              .long("host")
              .takes_value(true)
-             .default_value("127.0.0.1"))
+             .default_value(HOST))
         .arg(Arg::with_name("port")
              .help("Port to connect to")
              .short("P")
              .long("port")
              .takes_value(true)
-             .default_value("5672"))
+             .default_value(PORT))
         .arg(Arg::with_name("user")
              .help("User to authenticate with")
              .short("u")
              .alias("l")
              .long("user")
              .takes_value(true)
-             .default_value("guest"))
+             .default_value(USER))
         .arg(Arg::with_name("password")
              .help("Password to authenticate with")
              .short("p")
              .long("password")
              .takes_value(true)
-             .default_value("guest"))
+             .default_value(PASS))
         .arg(Arg::with_name("vhost")
              .help("Virtual host")
              .short("v")
              .long("vhost")
              .takes_value(true)
-             .default_value(""))
+             .default_value(VHST))
         .arg(Arg::with_name("url")
              .help("AMQP connection url (amqp://user:pass@host:port/vhost)")
              .short("U")
@@ -137,7 +143,12 @@ fn _main() -> Result<(),RbtError> {
         )
         .get_matches();
 
-    // global opts, before "publish or "subscribe"
+    // order of preference
+    // 1. CONF-file
+    // 2. URL
+    // 3. explicit arg.
+
+    // start with defaults.
     let mut opts = amqp::Options {
         host:     value_t!(matches, "host", String)?,
         port:     value_t!(matches, "port", u16)?,
@@ -147,19 +158,27 @@ fn _main() -> Result<(),RbtError> {
         ..Default::default()
     };
 
-    // url overrides the defaults
+    // CONF file
+    parse_conf(&mut opts);
+
+    // URL arg
     if let Ok(urlstr) = value_t!(matches, "url", String) {
         parse_url(&mut opts, urlstr)?;
-    } else {
-        // we use the CONF env first, and if
-        // that doesn't work out, we fall back on
-        // AMQP_URL
-        if !parse_conf(&mut opts) {
-            if let Ok(urlstr) = env::var("AMQP_URL") {
-                parse_url(&mut opts, urlstr)?;
+    }
+
+    fn if_differs(opt:Option<&str>, def:&str, set:&mut FnMut(String) -> ()) {
+        if let Some(v) = opt {
+            if v != def {
+                set(v.to_string());
             }
         }
     }
+
+    if_differs(matches.value_of("host"), HOST, &mut|v|{ opts.host = v });
+    if_differs(matches.value_of("port"), PORT, &mut|v|{ opts.port = v.parse::<u16>().unwrap() });
+    if_differs(matches.value_of("user"), USER, &mut|v|{ opts.login = v });
+    if_differs(matches.value_of("password"), PASS, &mut|v|{ opts.password = v });
+    if_differs(matches.value_of("vhost"), VHST, &mut|v|{ opts.vhost = v });
 
     // depending on subcommand, we do one or the other
     match matches.subcommand_name() {
