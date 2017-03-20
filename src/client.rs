@@ -12,6 +12,7 @@ pub struct Sendable {
     pub headers: Vec<String>,
     pub file_name: String,
     pub reader: Box<io::Read>,
+    pub priority: u8
 }
 
 pub type ReceiveCb = FnMut(Deliver, BasicProperties, Vec<u8>) -> Result<(), RbtError> + Send;
@@ -48,6 +49,7 @@ pub fn open_send(o:Options, s:Sendable, r:Option<Receiver>) -> Result<(),RbtErro
     let mut props = BasicProperties {
         content_type: Some(s.content_type),
         headers: Some(headers),
+        priority: Some(s.priority),
         ..Default::default()
     };
 
