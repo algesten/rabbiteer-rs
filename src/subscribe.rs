@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 use rand::{thread_rng, Rng};
 use amqp::protocol::basic::{Deliver, BasicProperties};
-use amqp::{self, TableEntry};
+use amqp::{self, TableEntry, Channel};
 use clap::ArgMatches;
 use std::fs;
 use std::path::Path;
@@ -9,6 +9,7 @@ use mime;
 use client;
 use output;
 use error::RbtError;
+use std::panic;
 
 
 pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtError> {
@@ -31,7 +32,7 @@ pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtErr
         }
     }
 
-    let receive = move |deliver:Deliver, props:BasicProperties, body:Vec<u8>| ->
+    let receive = move |channel: &mut Channel, deliver:Deliver, props:BasicProperties, body:Vec<u8>| ->
         Result<(),RbtError> {
 
         let msg = output::build_output(info, &deliver, &props, body)?;
@@ -74,8 +75,13 @@ pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtErr
         }
 
         // maybe end here?
-        if single {
-            ::std::process::exit(0);
+        if single {         
+            // closing the channel
+            channel.close(200, "Bye")?;
+            panic::set_hook(Box::new(|_| {
+            }));
+            // Until amqp library finds a way to exit consumer, terminate consumer_thread here.
+            panic!();
         }
 
         Ok(())

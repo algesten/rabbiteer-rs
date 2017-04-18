@@ -5,6 +5,8 @@ use amqp::protocol::basic::{Deliver, BasicProperties};
 use amqp::Basic;
 use amqp::{Table, TableEntry};
 
+use std::thread;
+
 pub struct Sendable {
     pub exchange: String,
     pub routing_key: String,
@@ -15,7 +17,7 @@ pub struct Sendable {
     pub priority: u8
 }
 
-pub type ReceiveCb = FnMut(Deliver, BasicProperties, Vec<u8>) -> Result<(), RbtError> + Send;
+pub type ReceiveCb = FnMut(&mut Channel, Deliver, BasicProperties, Vec<u8>) -> Result<(), RbtError> + Send;
 
 pub struct Receiver {
     pub exchange:String,
@@ -79,8 +81,16 @@ pub fn open_send(o:Options, s:Sendable, r:Option<Receiver>) -> Result<(),RbtErro
     channel.basic_publish(s.exchange, s.routing_key, false, false, props, *buffer)?;
 
     if isrpc {
-        // this stalls and we receive reply in callback
-        channel.start_consuming();
+
+        let consumers_thread = thread::Builder::new().name("consumer_thread".to_string()).spawn(move || {
+            channel.start_consuming();
+            channel
+        }).unwrap();
+        
+
+    // There is currently no way to stop the consumers so we put it in in its own thread
+        let mut _channel = consumers_thread.join();  
+        session.close(200, "Good Bye");
     } else {
         // and unwind if not rpc
         channel.close(200, "Bye")?;
@@ -126,7 +136,9 @@ impl amqp::Consumer for Receiver {
         channel.basic_ack(delivery_tag, false).unwrap();
 
         // and deliver to callback
-        ((self.callback)(deliver, headers, body)).unwrap_or_else(::error::handle);
+        ((self.callback)(channel, deliver, headers, body)).unwrap_or_else(::error::handle);
+
+        
 
     }
 }
