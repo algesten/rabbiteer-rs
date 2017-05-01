@@ -75,7 +75,7 @@ pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtErr
         }
 
         // maybe end here?
-        if single {         
+        if single {
             // closing the channel
             channel.close(200, "Bye")?;
             panic::set_hook(Box::new(|_| {

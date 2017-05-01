@@ -86,10 +86,10 @@ pub fn open_send(o:Options, s:Sendable, r:Option<Receiver>) -> Result<(),RbtErro
             channel.start_consuming();
             channel
         }).unwrap();
-        
+
 
     // There is currently no way to stop the consumers so we put it in in its own thread
-        let mut _channel = consumers_thread.join();  
+        let mut _channel = consumers_thread.join();
         session.close(200, "Good Bye");
     } else {
         // and unwind if not rpc
@@ -137,8 +137,6 @@ impl amqp::Consumer for Receiver {
 
         // and deliver to callback
         ((self.callback)(channel, deliver, headers, body)).unwrap_or_else(::error::handle);
-
-        
 
     }
 }
