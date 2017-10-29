@@ -6,6 +6,9 @@ use amqp::Basic;
 use amqp::{Table, TableEntry};
 
 use std::thread;
+use std::time::Duration;
+use std::sync::mpsc;
+use std::error::Error;
 
 pub struct Sendable {
     pub exchange: String,
@@ -14,7 +17,8 @@ pub struct Sendable {
     pub headers: Vec<String>,
     pub file_name: String,
     pub reader: Box<io::Read>,
-    pub priority: u8
+    pub priority: u8,
+    pub rpctimeout: u64
 }
 
 pub type ReceiveCb = FnMut(&mut Channel, Deliver, BasicProperties, Vec<u8>) -> Result<(), RbtError> + Send;
@@ -82,15 +86,31 @@ pub fn open_send(o:Options, s:Sendable, r:Option<Receiver>) -> Result<(),RbtErro
     channel.basic_publish(s.exchange, s.routing_key, false, false, props, *buffer)?;
 
     if isrpc {
-
-        let consumers_thread = thread::Builder::new().name("consumer_thread".to_string()).spawn(move || {
+        let (tx, rx) = mpsc::channel();
+        thread::Builder::new().name("consumer_thread".to_string()).spawn(move || {
             channel.start_consuming();
-            channel
+            tx.send(channel).unwrap();
         }).unwrap();
 
 
-    // There is currently no way to stop the consumers so we put it in in its own thread
-        let mut _channel = consumers_thread.join();
+        let timeout = s.rpctimeout;
+        if timeout == 0 {
+            // Block forever until recieve
+            rx.recv().unwrap();
+        } else {
+            let res = rx.recv_timeout(Duration::from_millis(timeout));
+
+            match res {
+                Ok(mut ch) => {
+                    ch.close(200, "Bye")?;
+                }                  
+                Err(err) => {
+                    if err.description() == "timed out waiting on channel".to_string() {
+                        println!("Error timeout");
+                    }
+                }
+            }
+        }
         session.close(200, "Good Bye");
     } else {
         // and unwind if not rpc

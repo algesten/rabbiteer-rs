@@ -61,7 +61,8 @@ pub fn do_publish(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtError
         headers:      values_t!(matches, "header", String).unwrap_or(vec![]),
         file_name:    file_name.to_owned(),
         reader:       reader,
-        priority:     value_t!(matches, "priority", u8).unwrap_or(0)
+        priority:     value_t!(matches, "priority", u8).unwrap_or(0),
+        rpctimeout:   value_t!(matches, "rpctimeout", u64).unwrap_or(0)
     };
 
     // if we are doing an rpc with replyTo/correlationId, we set up a receiver

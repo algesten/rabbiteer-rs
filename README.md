@@ -82,7 +82,7 @@ Publishing pushes data from stdin or a file to an exchange.
         -H, --header <header>...             Header on the form "My-Header: Value"
         -r, --routing-key <routing_key>      Routing key [default: ]
         -z, --priority <priority>            Priority
-
+        -t, --rpctimeout <rpctimeout>        RPC timeout in milliseconds
 
 ### Example
 
