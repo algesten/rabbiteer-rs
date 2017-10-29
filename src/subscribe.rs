@@ -15,7 +15,8 @@ use std::panic;
 pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtError> {
 
     let output = value_t!(matches, "output", String)?;
-    let queue  = value_t!(matches, "queue", String)?;
+    let queue : Option<String> = matches.value_of("queue").map(str::to_owned);
+    let force_declare : bool = matches.is_present("declare");
     let info   = matches.is_present("info");
     let single = matches.is_present("single");
 
@@ -90,11 +91,12 @@ pub fn do_subscribe(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtErr
 
     let receiver = client::Receiver {
         exchange: value_t!(matches, "exchange", String)?,
-        routing_key: value_t!(matches, "routing_key", String)?,
+        routing_key: matches.value_of("routing_key").map(str::to_owned),
+        auto_ack: ! matches.is_present("noack"),
         callback: Box::new(receive),
     };
 
-    client::open_receive(opts, queue.as_ref(), receiver)
+    client::open_receive(opts, queue, force_declare, receiver)
 }
 
 fn file_name_of(props:&BasicProperties, types:&mime::Types) -> String {

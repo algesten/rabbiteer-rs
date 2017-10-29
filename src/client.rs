@@ -21,7 +21,8 @@ pub type ReceiveCb = FnMut(&mut Channel, Deliver, BasicProperties, Vec<u8>) -> R
 
 pub struct Receiver {
     pub exchange:String,
-    pub routing_key:String,
+    pub routing_key: Option<String>,
+    pub auto_ack: bool,
     pub callback:Box<ReceiveCb>,
 }
 
@@ -59,7 +60,7 @@ pub fn open_send(o:Options, s:Sendable, r:Option<Receiver>) -> Result<(),RbtErro
     let isrpc = match r {
         Some(receiver) => {
             // open a receiver and get the queue name
-            let queue_name = do_open_receive(&mut channel, "-", receiver)?;
+            let queue_name = do_open_receive(&mut channel, None, false, receiver)?;
 
             // put queue name as our reply to
             props.reply_to = Some(queue_name);
@@ -132,8 +133,10 @@ impl amqp::Consumer for Receiver {
 
         let delivery_tag = deliver.delivery_tag.clone();
 
-        // ack it. make it go away.
-        channel.basic_ack(delivery_tag, false).unwrap();
+        if self.auto_ack {
+            // ack it. make it go away.
+            channel.basic_ack(delivery_tag, false).unwrap();
+        }
 
         // and deliver to callback
         ((self.callback)(channel, deliver, headers, body)).unwrap_or_else(::error::handle);
@@ -141,13 +144,13 @@ impl amqp::Consumer for Receiver {
     }
 }
 
-pub fn open_receive(o:Options, q:&str, r:Receiver) -> Result<(),RbtError> {
+pub fn open_receive(o:Options, q:Option<String>, force_declare: bool, r:Receiver) -> Result<(),RbtError> {
 
     // open session/channel
     let (_, mut channel) = _open(o)?;
 
     // and pass it to internal open_receive
-    do_open_receive(&mut channel, q, r)?;
+    do_open_receive(&mut channel, q, force_declare, r)?;
 
     // and go!
     channel.start_consuming();
@@ -156,27 +159,52 @@ pub fn open_receive(o:Options, q:&str, r:Receiver) -> Result<(),RbtError> {
 }
 
 
-fn do_open_receive(channel:&mut Channel, q:&str, r:Receiver) -> Result<String,RbtError> {
+fn do_open_receive(channel:&mut Channel, q:Option<String>, force_declare: bool, r:Receiver) -> Result<String,RbtError> {
 
-    // when queue_name is -, we declare an exclusive anonymous queue
-    // that auto deletes when the process exits.
-    let (queue_name, auto_delete) = match q {
-        "-" => ("", true),
-        _ => (q, false)
+    let mut auto_delete = false;
+    let mut bind_routing_key = r.routing_key.clone();
+    
+    let queue_name = match q {
+        Some(q) => {
+            // Force the declaration of this queue
+            if force_declare {
+                // queue, passive, durable, exclusive, auto_delete, nowait, arguments
+                let queue_declare =  channel.queue_declare(q, false, false, auto_delete, auto_delete, false, Table::new())?;
+
+                // name is auto generated
+                queue_declare.queue
+            }else{
+                q
+            }
+        }
+        None => {
+            auto_delete = true; // Unnamed queues are ephemeral
+
+            if let None = bind_routing_key {
+                bind_routing_key = Some("#".to_owned()); // Default the routing key
+            }
+
+            // queue, passive, durable, exclusive, auto_delete, nowait, arguments
+            let queue_declare =
+                channel.queue_declare(
+                                    q.clone().unwrap_or("".to_owned()) ,
+                                    false, false,
+                                    auto_delete, auto_delete, false, Table::new())?;
+
+            // name is auto generated
+            queue_declare.queue
+
+        }
     };
-    // queue, passive, durable, exclusive, auto_delete, nowait, arguments
-    let queue_declare =
-        channel.queue_declare(queue_name, false, false,
-                              auto_delete, auto_delete, false, Table::new())?;
 
-    // name is auto generated
-    let decl_queue_name = queue_declare.queue;
-
-    // bind queue to the exchange, which already must
-    // be declared.
-    if r.exchange != "" {
-        channel.queue_bind(decl_queue_name.clone(), r.exchange.clone(), r.routing_key.clone(),
-                           false, Table::new())?;
+    // Only bind if we have a routing key - May be an existing queue
+    if let Some(routing_key) = bind_routing_key {
+        // bind queue to the exchange, which already must be declared.
+        
+        if r.exchange != "" {
+            channel.queue_bind(queue_name.clone(), r.exchange.clone(), routing_key.clone(),
+                            false, Table::new())?;
+        }
     }
 
     // why oh why?
@@ -184,8 +212,8 @@ fn do_open_receive(channel:&mut Channel, q:&str, r:Receiver) -> Result<String,Rb
 
     // start consuming the queue.
     // callback, queue, consumer_tag, no_local, no_ack, exclusive, nowait, arguments
-    channel.basic_consume(r, decl_queue_name.clone(), consumer_tag, false,
+    channel.basic_consume(r, queue_name.clone(), consumer_tag, false,
                           false, false, false, Table::new())?;
 
-    Ok(decl_queue_name)
+    Ok(queue_name)
 }

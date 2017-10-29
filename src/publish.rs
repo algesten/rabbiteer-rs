@@ -95,8 +95,9 @@ pub fn do_publish(opts:amqp::Options, matches:&ArgMatches) -> Result<(),RbtError
 
             let receiver = client::Receiver {
                 exchange: "".to_owned(),
-                routing_key: "".to_owned(),
+                routing_key: None,
                 callback: Box::new(receive),
+                auto_ack: true,
             };
 
             Some(receiver)
