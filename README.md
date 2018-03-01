@@ -77,7 +77,7 @@ Publishing pushes data from stdin or a file to an exchange.
     OPTIONS:
         -c, --content-type <content_type>    Content type such as application/json. Inferred from filename if
                                              possible.
-        -e, --exchange <exchange>            Exchange to publish to
+        -e, --exchange <exchange>            Exchange to publish to [default ]
         -f, --file <file>                    Filename (- is stdin) [default: -]
         -H, --header <header>...             Header on the form "My-Header: Value"
         -r, --routing-key <routing_key>      Routing key [default: ]
@@ -104,7 +104,7 @@ Content-type is inferred if possible.
 Using the `replyTo` header.
 
     $ CONF=conf.json rabbiteer publish -e myservice -r somecall --rpc -f ./foo.json
-    
+
 Calls `myservice/somecall` using the contents of file `foo.json` and sets up
 a `replyTo` header and waits the the rpc reply. The reply will be printed
 to stdout.

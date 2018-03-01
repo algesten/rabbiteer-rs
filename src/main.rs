@@ -78,7 +78,7 @@ fn _main() -> Result<(),RbtError> {
                          .short("e")
                          .long("exchange")
                          .takes_value(true)
-                         .required(true))
+                         .default_value(""))
                     .arg(Arg::with_name("routing_key")
                          .help("Routing key")
                          .short("r")
