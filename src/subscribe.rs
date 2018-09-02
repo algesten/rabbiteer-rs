@@ -1,5 +1,5 @@
 use std::io::{self, Write};
-use rand::{thread_rng, Rng};
+use rand::{thread_rng, Rng, distributions::Alphanumeric};
 use amqp::protocol::basic::{Deliver, BasicProperties};
 use amqp::{self, TableEntry, Channel};
 use clap::ArgMatches;
@@ -123,7 +123,7 @@ fn file_name_of(props:&BasicProperties, types:&mime::Types) -> String {
 
 fn gen_rand_name(ext:String) -> String {
     // generate 16 ascii chars
-    let mut rand:String = thread_rng().gen_ascii_chars().take(16).collect();
+    let mut rand:String = thread_rng().sample_iter(&Alphanumeric).take(16).collect();
     rand.push_str(".");
     rand.push_str(&ext);
     rand

@@ -10,7 +10,7 @@ readme = "README.md"
 
 [dependencies]
 clap = "2"
-rand = "0.3"
+rand = "0.5"
 conduit-mime-types = "0.7"
 rustc-serialize = "0.3"
 url = "1"
@@ -19,5 +19,5 @@ url = "1"
 #git = "https://github.com/algesten/rust-amqp"
 #branch = "rabbiteer"
 #path = "/Users/martin/dev/_dist/rust-amqp"
-version = "0.0.20"
+version = "0.1"
 default-features = false
