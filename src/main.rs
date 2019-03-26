@@ -230,9 +230,11 @@ fn _main() -> Result<(),RbtError> {
 // update the opts object with the given url
 fn parse_url(opts:&mut amqp::Options, urlstr:String) -> Result<(),RbtError> {
     if let Ok(url) = Url::parse(urlstr.as_ref()) {
-        if url.scheme() != "amqp" {
-            rbterr!("Unknown scheme: {}", url);
-        }
+        opts.scheme = match url.scheme() {
+            "amqp" => amqp::AMQPScheme::AMQP,
+            "amqps" => amqp::AMQPScheme::AMQPS,
+            _ => rbterr!("Unknown scheme: {}", url),
+        };
         if let Some(host) = url.host_str() {
             opts.host = host.to_owned();
         }
